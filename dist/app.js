@@ -75,7 +75,7 @@ function render(t){
  const l=s.lines[cache.idx];if(l){const visible=Math.max(1,target-l.start);tip=motion.tip||l.points[visible-1];if(!original)path(ctx,l.points.slice(0,visible),mode==='color'?l.color:'#29362e',s.weight)}
  if(!tip && original && !s.length && frac<.96 && cache.pixels){
   const pixels=cache.pixels;
-  const pixel=pixels.order[Math.max(0,pixels.count-1)];
+  const pixel=pixels.linear?Math.max(0,pixels.count-1):pixels.order[Math.max(0,pixels.count-1)];
   tip=[pixel%s.src.width,Math.floor(pixel/s.src.width)]
  }
  if(mode==='fill' && frac===1){ctx.globalAlpha=Math.min(1,s.hold===0?1:(local-drawTime)/Math.min(.6,duration*s.hold/100));ctx.drawImage(s.src,0,0);ctx.globalAlpha=1}
