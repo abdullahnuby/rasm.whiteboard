@@ -1,1 +1,359 @@
-<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>رَسم | استوديو الوايت بورد</title><link rel="stylesheet" href="style.css"><header><div class="logo"><i>✎</i> رَسم</div><span class="divider"></span><span>استوديو الوايت بورد</span><button id="projectMenu" aria-haspopup="dialog">ملف المشروع</button><button id="export" class="primary">⇩ &nbsp; تصدير الفيديو</button></header><main><section class="intro"><div><small>مساحة العمل &nbsp; / &nbsp; المشروع الحالي</small><h1 id="titleView">مشروع الوايت بورد</h1><span id="saveState" role="status"></span></div><button id="addFiles">＋ &nbsp; إضافة صور أو صوت</button></section><section id="operationStatus" class="operationStatus" hidden aria-live="polite"><div><strong id="operationText">جارٍ تنفيذ العملية…</strong><small id="operationPercent">0%</small><progress id="operationProgress" max="100" value="0"></progress></div></section><section id="batchStatus" class="batchStatus" hidden aria-live="polite"><div class="batchInfo"><strong id="batchLabel">جاري تجهيز الصور…</strong><span id="batchCount">0 / 0</span><progress id="batchProgress" max="1" value="0"></progress></div><button id="batchCancel" type="button">إلغاء المعالجة</button></section><section id="exportPanel" class="exportPanel" hidden aria-live="polite"><div class="exportInfo"><strong id="exportLabel">تجهيز التصدير…</strong><span><output id="exportPercent">0%</output> · <small id="exportElapsed">0 / 0 ثانية</small></span><progress id="exportProgress" max="100" value="0"></progress></div><video id="exportPreview" controls playsinline preload="metadata" hidden aria-label="معاينة الفيديو المُصدّر"></video><button id="exportCancel" type="button">إلغاء التصدير</button><button id="exportClose" type="button" hidden>إخفاء</button></section><div class="grid"><section class="studio"><div class="panelhead"><h2>معاينة الفيديو</h2><span id="meta"></span></div><div class="stage"><canvas id="board" width="960" height="540"></canvas></div><div class="transport"><button id="play" aria-label="تشغيل أو إيقاف">▶</button><output id="clock"></output><input id="seek" type="range" min="0" value="0" step=".01" aria-label="موضع التشغيل"></div><section class="timelinePanel"><div class="timelineToolbar"><div><h2>الخط الزمني</h2><small>اسحب طرف المشهد لتعديل مدته مباشرة · انقر للمراجعة</small></div><div class="timelineTools"><output id="timelineTotal">00:00</output><button id="zoomOut" type="button" aria-label="تصغير الخط الزمني">−</button><button id="zoomIn" type="button" aria-label="تكبير الخط الزمني">＋</button><button id="zoomFit" type="button">ملاءمة</button></div></div><div id="timelineScroll" class="timelineScroll"><div id="timelineContent" class="timelineContent"><div id="timelineRuler" class="timelineRuler"></div><div id="timelineVideoTrack" class="timelineVideoTrack"></div><div id="timelineAudioTrack" class="timelineAudioTrack" hidden></div><div id="timelinePlayhead" class="timelinePlayhead"></div></div></div></section><div class="panelhead sceneshead"><h2>قائمة المشاهد</h2><span id="count"></span></div><div id="cards"></div><section class="audioLane"><div><h3>مسار التعليق الصوتي</h3><small id="audioInfo">مفيش تسجيل مضاف</small></div><button id="audioPick">إضافة تسجيل</button><button id="audioClear" hidden>إزالة الصوت</button><input type="file" accept=".mp3,.m4a,.aac,.wav,.ogg,.flac,.opus,.weba,audio/*" id="soundFile" hidden></section><div class="edit"><button id="earlier">تقديم المشهد</button><button id="later">تأخير المشهد</button><button id="undoRemove" disabled>استرجاع المحذوف</button><button id="copy">تكرار</button><button id="remove">حذف المشهد</button></div></section><aside><h2>خصائص المشهد</h2><div class="group"><h3>يد الرسم</h3><div id="hands"></div><label>الإيد في الصورة الأصلية<select id="sourceHand"><option value="auto">إظهار الإيد مع تنبيه عند الاشتباه</option><option value="detect">إخفاء الإيد تلقائيًا عند الاشتباه</option><option value="present">الصورة فيها إيد بالفعل</option><option value="clean">الصورة من غير إيد تصوير</option></select></label><small id="handState"></small><label>حجم الإيد<input id="handSize" type="range" min="55" max="160" value="100"><output id="sizeValue">100%</output></label><details><summary>يد مخصصة من صورة PNG</summary><input type="file" accept="image/png" id="handFile"><label>موضع سنّ القلم داخل الصورة (%)</label><div class="coords"><label>أفقي<input id="tipX" type="number" min="0" max="100" value="5"></label><label>رأسي<input id="tipY" type="number" min="0" max="100" value="88"></label></div><button id="useHand" disabled>استخدم اليد المخصصة</button></details><label>اتجاه اليد<select id="side"><option value="1">اليد اليمنى</option><option value="-1">اليد اليسرى</option></select></label></div><div class="group"><h3>الرسم والتوقيت</h3><button id="zoneEdit">ترتيب مناطق الرسم</button><label>سُمك الماركر<select id="weight"><option value="1">رفيع</option><option value="1.4">متوسط</option><option value="2.3">عريض</option></select></label><label>اسم المشهد<input id="sceneName" maxlength="120"></label><label>أسلوب الرسم<select id="style"><option value="original">ألوان الصورة الأصلية</option><option value="ink">ماركر أسود</option><option value="color">خطوط بألوان الصورة</option><option value="fill">خطوط ثم الصورة الأصلية</option></select></label><label>طريقة حركة الإيد<select id="motionStyle"><option value="smart">كتابة ذكية · مسار مركز الخط</option><option value="contour">تتبع حدود الصورة · تفاصيل أكثر</option></select></label><button id="allOriginal">تطبيق الألوان الأصلية على كل المشاهد</button><label>سرعة حركة الإيد<select id="speed"><option value="0.1">بطيئة جدًا · 0.1×</option><option value="0.15">بطيئة جدًا · 0.15×</option><option value="0.2">بطيئة · 0.2×</option><option value="0.25">ربع السرعة · 0.25×</option><option value="0.35">هادئة · 0.35×</option><option value="0.5">نصف السرعة · 0.5×</option><option value="0.75">هادئة نسبيًا · 0.75×</option><option value="1">السرعة الأصلية · 1×</option></select></label><small id="speedHint">تقليل سرعة اليد يطوّل مدة المشهد تلقائيًا حتى يكتمل الرسم. راجع مدته في الخط الزمني.</small><button id="allSpeed">تطبيق السرعة على كل المشاهد</button><p id="sceneTime"></p><label>مدة المشهد على الخط الزمني (ثانية)<input id="duration" type="number" min="1" max="180" step=".1" value="6"></label><label>فترة الثبات بعد الرسم (%)<input id="hold" type="range" min="0" max="70" value="18"><output id="holdValue">18%</output></label><label>لون خلفية اللوحة<input id="paper" type="color" value="#ffffff"></label><label>انتقال نهاية المشهد<select id="transition"><option value="cut">قطع مباشر</option><option value="fade">تلاشي إلى خلفية اللوحة</option></select></label></div><div class="group"><h3>إعدادات الفيديو</h3><label>أبعاد اللوحة<select id="ratio"><option value="1.7777778">أفقي · 16:9</option><option value=".5625">رأسي · 9:16</option><option value="1">مربع · 1:1</option></select></label><label>دقة التصدير<select id="quality"><option value="1280">720p HD</option><option value="1920">1080p Full HD</option></select></label></div></aside></div><div id="msg" role="status"></div><a id="download" hidden>تنزيل الفيديو</a><input id="files" type="file" multiple accept="image/*,audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac,.opus,.weba" hidden></main><dialog id="zoneDialog"><h2>ترتيب مناطق الرسم</h2><p>اسحب مستطيل حوالين كل عنصر بالترتيب اللي تحب الإيد ترسمه بيه. باقي الخطوط بتترسم في الآخر.</p><canvas id="zoneBoard" aria-label="تحديد مناطق الرسم"></canvas><div class="actions"><button id="zoneUndo">تراجع عن منطقة</button><button id="zoneSave">تطبيق الترتيب</button><button id="zoneClose">إلغاء</button></div></dialog><dialog id="projectDialog"><form method="dialog"><button class="close">إغلاق</button></form><h2>ملف المشروع</h2><label>اسم المشروع<input id="projectName" maxlength="100"></label><p>الحفظ التلقائي على الجهاز ده. لتنقل الشغل لجهاز تاني نزّل نسخة تشمل الصور والتسجيل والإعدادات.</p><div class="actions"><button id="backup">تنزيل نسخة المشروع</button><button id="restore">فتح نسخة محفوظة</button></div><section id="recoverySection" class="recoverySection" hidden><h3>نسخ احتياطية مستردة</h3><p>نسخ تم الاحتفاظ بها عندما تعذرت استعادة مشروع سابق. يمكنك تنزيل النسخة أو محاولة فتحها.</p><div id="recoveredItems"></div></section><input id="projectInput" type="file" accept=".rasm,application/json" hidden></dialog><script src="reliability.js"></script><script src="timeline.js"></script><script src="export.js"></script><script src="motion.js"></script><script src="engine.js"></script><script src="app.js"></script><script src="project.js"></script><script src="zones.js"></script></html>
+<!doctype html>
+<html lang="ar" dir="rtl">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1b1832">
+<meta name="description" content="حوّل صورك إلى فيديو وايت بورد، واضبط الرسم والتعليق الصوتي ثم صدّر الفيديو.">
+<title>رَسم | استوديو الوايت بورد</title>
+<link rel="stylesheet" href="style.css">
+<header>
+<button id="mobileMenu" class="mobileOnly menuButton" aria-label="فتح القائمة الجانبية" aria-controls="mobileDrawer" aria-expanded="false"><span aria-hidden="true">☰</span></button>
+<div class="logo">
+<i aria-hidden="true">✎</i>
+<strong>رَسم</strong>
+</div>
+<span class="divider">
+</span>
+<span>استوديو الوايت بورد</span>
+<button id="projectMenu" aria-haspopup="dialog">إدارة المشروع</button>
+<button id="export" class="primary">تصدير الفيديو</button>
+</header>
+<main>
+<section class="intro">
+<div>
+<small>استوديو الرسم</small>
+<h1 id="titleView">مشروع وايت بورد</h1>
+<span id="saveState" role="status">
+</span>
+</div>
+<button id="addFiles">استيراد صور أو صوت</button>
+</section>
+<section class="startGuide" id="startGuide">
+<div>
+<h2>حوّل صورك إلى قصة مرسومة</h2>
+<p>ارفع صورك بالترتيب، أضف تعليقك الصوتي، ثم عاين الفيديو وصدّره.</p>
+</div>
+<div class="actions">
+<button id="startImport" class="primary">اختيار الصور</button>
+<button id="sampleProject">تجربة مثال</button>
+</div>
+</section>
+<section id="operationStatus" class="operationStatus" hidden aria-live="polite">
+<div>
+<strong id="operationText">جارٍ تنفيذ العملية…</strong>
+<small id="operationPercent">0%</small>
+<progress id="operationProgress" max="100" value="0">
+</progress>
+</div>
+</section>
+<section id="batchStatus" class="batchStatus" hidden aria-live="polite">
+<div class="batchInfo">
+<strong id="batchLabel">جاري تجهيز الصور…</strong>
+<span id="batchCount">0 / 0</span>
+<progress id="batchProgress" max="1" value="0">
+</progress>
+</div>
+<button id="batchCancel" type="button">إلغاء المعالجة</button>
+</section>
+<section id="exportPanel" class="exportPanel" hidden aria-live="polite">
+<div class="exportInfo">
+<strong id="exportLabel">تجهيز التصدير…</strong>
+<span>
+<output id="exportPercent">0%</output> · <small id="exportElapsed">0 / 0 ثانية</small>
+</span>
+<progress id="exportProgress" max="100" value="0">
+</progress>
+</div>
+<video id="exportPreview" controls playsinline preload="metadata" hidden aria-label="معاينة الفيديو المُصدّر">
+</video>
+<button id="exportCancel" type="button">إلغاء التصدير</button>
+<button id="exportDownload" class="primary" hidden>تنزيل الفيديو</button>
+<button id="exportClose" type="button" hidden>إخفاء</button>
+</section>
+<nav class="workflow" aria-label="مراحل إنشاء الفيديو">
+<button id="flowImages">الصور <small id="stepImages">ابدأ هنا</small>
+</button>
+<button id="flowAudio">التعليق الصوتي <small id="stepAudio">اختياري</small>
+</button>
+<button id="flowPreview">المعاينة <small id="stepPreview">مراجعة الفيديو</small>
+</button>
+</nav>
+<div class="grid">
+<section class="studio">
+<div class="panelhead">
+<h2>لوحة المعاينة</h2>
+<button id="editSceneMobile" class="mobileOnly">إعدادات المشهد</button>
+<span id="meta">
+</span>
+</div>
+<div class="stage">
+<div id="emptyBoard" class="emptyBoard">
+<span aria-hidden="true">✎</span>
+<h2>صورك هي بداية الفيديو</h2>
+<p>اسحب الصور هنا أو اخترها من جهازك.<br>الأرقام في أسماء الملفات تحدّد ترتيبها.</p>
+<button id="emptyImport">إضافة صور</button>
+</div>
+<canvas id="board" width="960" height="540">
+</canvas>
+</div>
+<div class="transport">
+<button id="play" aria-label="تشغيل أو إيقاف">▶︎</button>
+<output id="clock">
+</output>
+<input id="seek" type="range" min="0" value="0" step=".01" aria-label="موضع التشغيل">
+</div>
+<section class="timelinePanel">
+<div class="timelineToolbar">
+<div>
+<h2>الخط الزمني</h2>
+<small>اختر مشهدًا لتعديله، واسحب حافته لضبط مدته.</small>
+</div>
+<div class="timelineTools">
+<output id="timelineTotal">00:00</output>
+<button id="zoomOut" type="button" aria-label="تصغير الخط الزمني">−</button>
+<button id="zoomIn" type="button" aria-label="تكبير الخط الزمني">＋</button>
+<button id="zoomFit" type="button">ملاءمة</button>
+</div>
+</div>
+<div id="timelineScroll" class="timelineScroll">
+<div id="timelineContent" class="timelineContent">
+<div id="timelineRuler" class="timelineRuler">
+</div>
+<div id="timelineVideoTrack" class="timelineVideoTrack">
+</div>
+<div id="timelineAudioTrack" class="timelineAudioTrack" hidden>
+</div>
+<div id="timelinePlayhead" class="timelinePlayhead">
+</div>
+</div>
+</div>
+</section>
+<details class="sceneList">
+<summary>عرض قائمة المشاهد <span id="count">
+</span>
+</summary>
+<div id="cards">
+</div>
+</details>
+<section class="audioLane" id="audioSection">
+<div>
+<h3>التعليق الصوتي</h3>
+<small id="audioInfo">لم يُضف تسجيل بعد</small>
+</div>
+<button id="audioPick">إضافة تسجيل</button>
+<button id="audioClear" hidden>إزالة الصوت</button>
+<div class="audioAdvice">
+<span id="audioMatch">
+</span>
+<button id="fitAudio" hidden>مطابقة الفيديو مع مدة التسجيل</button>
+</div>
+<input type="file" accept=".mp3,.m4a,.aac,.wav,.ogg,.flac,.opus,.weba,audio/*" id="soundFile" hidden>
+</section>
+<div class="edit">
+<button id="earlier">تقديم المشهد</button>
+<button id="later">تأخير المشهد</button>
+<button id="undoRemove" disabled>استعادة المحذوف</button>
+<button id="copy">تكرار</button>
+<button id="remove">حذف المشهد</button>
+</div>
+</section>
+<aside id="inspector">
+<h2 id="inspectorTitle">خصائص المشهد</h2>
+<nav class="sections" aria-label="إعدادات المشروع">
+<button id="open-scene" aria-controls="pane-scene" aria-pressed="true">المشهد</button>
+<button id="open-timing" aria-controls="pane-timing" aria-pressed="false">التوقيت</button>
+<button id="open-hand" aria-controls="pane-hand" aria-pressed="false">اليد</button>
+<button id="open-video" aria-controls="pane-video" aria-pressed="false">التصدير</button>
+</nav>
+<section class="group" id="pane-scene" aria-labelledby="open-scene">
+<label>اسم المشهد<input id="sceneName" maxlength="120">
+</label>
+<label>أسلوب الرسم<select id="style">
+<option value="original">ألوان الصورة الأصلية</option>
+<option value="ink">قلم تحديد أسود</option>
+<option value="color">خطوط بألوان الصورة</option>
+<option value="fill">خطوط ثم الصورة الأصلية</option>
+</select>
+</label>
+<label>طريقة حركة اليد<select id="motionStyle">
+<option value="smart">مسارات رئيسية · حركة هادئة</option>
+<option value="contour">تفاصيل دقيقة · تتبّع الحدود</option>
+</select>
+</label>
+<button id="zoneEdit">ترتيب مناطق الرسم</button>
+<details>
+<summary>خيارات المظهر</summary>
+<label>سُمك الخط<select id="weight">
+<option value="1">رفيع</option>
+<option value="1.4">متوسط</option>
+<option value="2.3">عريض</option>
+</select>
+</label>
+<label>لون خلفية اللوحة<input id="paper" type="color" value="#ffffff">
+</label>
+<label>انتقال نهاية المشهد<select id="transition">
+<option value="cut">قطع مباشر</option>
+<option value="fade">تلاشي إلى خلفية اللوحة</option>
+</select>
+</label>
+<button id="allOriginal">تطبيق الألوان الأصلية على كل المشاهد</button>
+</details>
+</section>
+<section class="group" id="pane-timing" aria-labelledby="open-timing" hidden>
+<label>مدة المشهد على الخط الزمني (ثانية)<input id="duration" type="number" min="1" max="180" step=".1" value="6">
+</label>
+<label>سرعة الرسم<select id="speed">
+<option value="0.1">بطيئة جدًا · 0.1×</option>
+<option value="0.15">بطيئة جدًا · 0.15×</option>
+<option value="0.2">بطيئة · 0.2×</option>
+<option value="0.25">ربع السرعة · 0.25×</option>
+<option value="0.35">هادئة · 0.35×</option>
+<option value="0.5">نصف السرعة · 0.5×</option>
+<option value="0.75">هادئة نسبيًا · 0.75×</option>
+<option value="1">السرعة الأصلية · 1×</option>
+</select>
+</label>
+<small id="speedHint">إبطاء الرسم يزيد مدة المشهد. يمكنك تعديل مدته من المخطط الزمني.</small>
+<p id="sceneTime">
+</p>
+<label>فترة الثبات بعد الرسم (%)<input id="hold" type="range" min="0" max="70" value="18">
+<output id="holdValue">18%</output>
+</label>
+<button id="allSpeed">تطبيق السرعة على كل المشاهد</button>
+</section>
+<section class="group" id="pane-hand" aria-labelledby="open-hand" hidden>
+<div id="hands">
+</div>
+<label>اليد داخل الصورة الأصلية<select id="sourceHand">
+<option value="auto">إظهار اليد مع التنبيه عند الاشتباه</option>
+<option value="detect">إخفاء اليد تلقائيًا عند الاشتباه</option>
+<option value="present">الصورة تتضمّن يدًا</option>
+<option value="clean">الصورة خالية من يد التصوير</option>
+</select>
+</label>
+<small id="handState">
+</small>
+<label>حجم اليد<input id="handSize" type="range" min="55" max="160" value="100">
+<output id="sizeValue">100%</output>
+</label>
+<details>
+<summary>يد مخصصة من صورة PNG</summary>
+<input type="file" accept="image/png" id="handFile">
+<label>موضع سنّ القلم داخل الصورة (%)</label>
+<div class="coords">
+<label>أفقي<input id="tipX" type="number" min="0" max="100" value="5">
+</label>
+<label>رأسي<input id="tipY" type="number" min="0" max="100" value="88">
+</label>
+</div>
+<button id="useHand" disabled>تطبيق اليد المخصصة</button>
+</details>
+<label>اتجاه اليد<select id="side">
+<option value="1">اليد اليمنى</option>
+<option value="-1">اليد اليسرى</option>
+</select>
+</label>
+</section>
+<section class="group" id="pane-video" aria-labelledby="open-video" hidden>
+<label>أبعاد اللوحة<select id="ratio">
+<option value="1.7777778">أفقي · 16:9</option>
+<option value=".5625">رأسي · 9:16</option>
+<option value="1">مربع · 1:1</option>
+</select>
+</label>
+<label>دقة التصدير<select id="quality">
+<option value="1280">720p HD</option>
+<option value="1920">1080p Full HD</option>
+</select>
+</label>
+<label>صيغة الملف<select id="exportFormat">
+<option value="auto">تلقائي · حسب دعم المتصفح</option>
+<option value="mp4">MP4</option>
+<option value="webm">WebM</option>
+</select>
+</label>
+<details>
+<summary>توافق التصدير</summary>
+<label>محرك التصدير<select id="exportEngine">
+<option value="auto">دقيق · معالجة كل إطار</option>
+<option value="live">متوافق · تسجيل في الوقت الحقيقي</option>
+</select>
+</label>
+<p>التسجيل المتوافق يتطلب إبقاء الصفحة في المقدمة. المحرك الدقيق يستخدم التوقيت الفعلي لكل إطار.</p>
+</details>
+</section>
+</aside>
+</div>
+<div id="msg" aria-live="polite" role="status">
+</div>
+<a id="download" hidden>تنزيل الفيديو</a>
+<input id="files" type="file" multiple accept="image/*,audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac,.opus,.weba" hidden>
+</main>
+<dialog id="mobileDrawer" aria-labelledby="drawerTitle">
+<div class="drawerHeader"><div><h2 id="drawerTitle">مساحة العمل</h2><small id="drawerProjectName">مشروع وايت بورد</small></div><button id="drawerClose" aria-label="إغلاق القائمة الجانبية">إغلاق ✕</button></div>
+<div class="drawerScroll">
+<nav class="drawerNav" aria-label="أدوات المشروع">
+<button id="drawerProject">إدارة المشروع</button>
+<button id="drawerImport">استيراد صور أو صوت</button>
+<button id="drawerAudio">التعليق الصوتي</button>
+<button id="drawerExportOptions">إعدادات التصدير</button>
+</nav>
+<div id="drawerContent"></div>
+</div>
+<div class="drawerFooter"><button id="drawerDone">العودة للمعاينة</button><button id="drawerExport" class="primary">تصدير الفيديو</button></div>
+</dialog>
+<dialog id="zoneDialog">
+<h2>ترتيب مناطق الرسم</h2>
+<p>حدّد عناصر المشهد بمستطيلات وفق ترتيب الرسم. تُرسم بقية التفاصيل في النهاية.</p>
+<canvas id="zoneBoard" aria-label="تحديد مناطق الرسم">
+</canvas>
+<div class="actions">
+<button id="zoneUndo">تراجع عن منطقة</button>
+<button id="zoneSave">تطبيق الترتيب</button>
+<button id="zoneClose">إلغاء</button>
+</div>
+</dialog>
+<dialog id="projectDialog">
+<form method="dialog">
+<button class="close">إغلاق</button>
+</form>
+<h2>ملف المشروع</h2>
+<label>اسم المشروع<input id="projectName" maxlength="100">
+</label>
+<p>يُحفظ المشروع تلقائيًا في هذا المتصفح. لنقله إلى جهاز آخر، نزّل نسخة تشمل الصور والتسجيل والإعدادات.</p>
+<div class="actions">
+<button id="newProject">مشروع جديد</button>
+<button id="backup">تنزيل نسخة المشروع</button>
+<button id="restore">فتح نسخة محفوظة</button>
+</div>
+<section id="recoverySection" class="recoverySection" hidden>
+<h3>مشروعات سابقة ونسخ مستردة</h3>
+<p>مشروعات احتُفظ بها عند بدء مشروع جديد أو عند تعذّر استعادة نسخة. يمكنك فتحها أو تنزيلها.</p>
+<div id="recoveredItems">
+</div>
+</section>
+<input id="projectInput" type="file" accept=".rasm,application/json" hidden>
+</dialog>
+<script src="reliability.js">
+</script>
+<script src="timeline.js">
+</script>
+<script src="export.js">
+</script>
+<script src="motion.js">
+</script>
+<script src="engine.js">
+</script>
+<script src="offline-export.js">
+</script>
+<script src="live-export.js">
+</script>
+<script src="app.js">
+</script>
+<script src="project.js">
+</script>
+<script src="zones.js">
+</script>
+<script src="interface.js">
+</script>
+</html>

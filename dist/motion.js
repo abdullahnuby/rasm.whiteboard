@@ -17,13 +17,64 @@ function edgeSkinRegion(data,w,h){
  }return false
 }
 function overlayEnabled(s){return s.tone!==2&&s.sourceHand!=='present'&&(s.sourceHand!=='detect'||!s.handHint)}
+// Original-colour scenes can reveal fine detail without sending the marker
+// through every texture fragment. Line-only modes retain their full paths.
+function principalStrokes(lines,width,height){
+ if(lines.length<36)return lines;
+ const ranked=lines.map((line,index)=>{
+  let distance=0;
+  for(let i=1;i<line.points.length;i++)distance+=Math.hypot(line.points[i][0]-line.points[i-1][0],line.points[i][1]-line.points[i-1][1]);
+  return {line,index,distance}
+ }).sort((a,b)=>b.distance-a.distance);
+ const budget=Math.hypot(width,height)*3,chosen=new Set();
+ let distance=0;
+ for(const item of ranked){
+  if(chosen.size>=120||(chosen.size>=12&&distance>=budget))break;
+  chosen.add(item.index);distance+=item.distance
+ }
+ return lines.filter((_,index)=>chosen.has(index))
+}
+function routeStrokes(lines){
+ if(lines.length<2)return lines;
+ const size=48,buckets=new Map(),remaining=new Set(lines.map((_,i)=>i));
+ const key=p=>Math.floor(p[0]/size)+','+Math.floor(p[1]/size);
+ lines.forEach((line,index)=>{for(const p of [line.points[0],line.points.at(-1)]){
+  const k=key(p);if(!buckets.has(k))buckets.set(k,[]);buckets.get(k).push(index)
+ }});
+ const ordered=[];let point=lines[0].points[0];
+ while(remaining.size){
+  const bx=Math.floor(point[0]/size),by=Math.floor(point[1]/size);
+  let candidate=-1,distance=Infinity,reverse=false;
+  for(let ring=0;ring<4&&candidate<0;ring++){
+   for(let x=-ring;x<=ring;x++)for(let y=-ring;y<=ring;y++){
+    if(Math.max(Math.abs(x),Math.abs(y))!==ring)continue;
+    for(const index of buckets.get((bx+x)+','+(by+y))||[]){
+     if(!remaining.has(index))continue;
+     const line=lines[index];
+     for(const flip of [false,true]){
+      const p=flip?line.points.at(-1):line.points[0],d=Math.hypot(p[0]-point[0],p[1]-point[1]);
+      if(d<distance){candidate=index;distance=d;reverse=flip}
+     }
+    }
+   }
+  }
+  if(candidate<0)candidate=remaining.values().next().value;
+  remaining.delete(candidate);const line=lines[candidate];
+  const next=reverse?{...line,points:line.points.slice().reverse()}:line;
+  ordered.push(next);point=next.points.at(-1)
+ }
+ return ordered
+}
 function applyZones(scene){
  const center=scene.motionStyle!=='contour'&&Array.isArray(scene.centerBaseLines)&&scene.centerBaseLines.length>0;
- const source=center?scene.centerBaseLines:scene.baseLines;
+ let source=center?scene.centerBaseLines:scene.baseLines;
+ if(scene.motionStyle!=='contour'&&scene.mode==='original')source=principalStrokes(source,scene.src.width,scene.src.height);
  const zones=scene.zones,groups=Array.from({length:zones.length+1},()=>[]);
  for(const line of source){const point=line.points[Math.floor(line.points.length/2)],x=point[0]/scene.src.width,y=point[1]/scene.src.height;
  const idx=zones.findIndex(z=>x>=z.x&&y>=z.y&&x<=z.x+z.w&&y<=z.y+z.h);groups[idx<0?zones.length:idx].push(line)}
- let start=0;scene.lines=groups.flat().map(line=>{const result={...line,start};start+=line.points.length;return result});
+ let start=0;scene.lines=groups.flatMap(group=>routeStrokes(group)).map(line=>{
+  const result={...line,start};start+=line.points.length;return result
+ });
  scene.length=start;scene.usingCenterline=center
 }
 
@@ -118,25 +169,37 @@ function strokeProgress(scene,fraction){
  if(!plan){
   let end=0,previous=null;
   const segments=scene.lines.map(line=>{
-   const first=line.points[0],gap=previous?Math.hypot(first[0]-previous[0],first[1]-previous[1]):0;
-   const begin=end,draw=begin+gap;
-   end=draw+line.points.length;
-   const segment={begin,draw,end,previous,first,line};previous=line.points.at(-1);return segment
+   const points=line.points,first=points[0],cumulative=new Float64Array(points.length);
+   for(let i=1;i<points.length;i++)cumulative[i]=cumulative[i-1]+Math.hypot(points[i][0]-points[i-1][0],points[i][1]-points[i-1][1]);
+   const gap=previous?Math.hypot(first[0]-previous[0],first[1]-previous[1]):0;
+   const begin=end,draw=begin+gap,stroke=Math.max(.01,cumulative.at(-1));
+   end=draw+stroke;
+   const segment={begin,draw,end,previous,first,line,cumulative};previous=points.at(-1);return segment
   });
   plan={segments,end};travelPlans.set(scene.lines,plan)
  }
- const distance=Math.min(1,Math.max(0,Number.isFinite(fraction)?fraction:0))*plan.end;
+ const fractionClamped=Math.min(1,Math.max(0,Number.isFinite(fraction)?fraction:0));
+ const distance=fractionClamped*plan.end;
  let low=0,high=plan.segments.length-1;
- while(low<high){const middle=(low+high)>>1;if(distance>=plan.segments[middle].end)low=middle+1;else high=middle}
+ while(low<high){const mid=(low+high)>>1;if(distance>=plan.segments[mid].end)low=mid+1;else high=mid}
  const seg=plan.segments[low];
  if(distance<seg.draw){
   const t=(distance-seg.begin)/(seg.draw-seg.begin);
   return {target:seg.line.start,tip:seg.first.map((v,i)=>seg.previous[i]+(v-seg.previous[i])*t),drawing:false}
  }
- const position=Math.max(0,Math.min(seg.line.points.length,distance-seg.draw));
- const pointIndex=Math.min(seg.line.points.length-1,Math.floor(position));
- const pointFraction=position-pointIndex;
- const current=seg.line.points[pointIndex],next=seg.line.points[Math.min(seg.line.points.length-1,pointIndex+1)];
- const tip=pointFraction>0?current.map((value,i)=>value+(next[i]-value)*pointFraction):current;
- return {target:Math.min(scene.length,seg.line.start+position),tip,drawing:true}
+ if(fractionClamped===1)return {target:scene.length,tip:seg.line.points.at(-1),drawing:false};
+ const along=Math.max(0,distance-seg.draw),lengths=seg.cumulative;
+ let left=0,right=lengths.length-1;
+ while(left<right){const mid=Math.ceil((left+right)/2);if(lengths[mid]>along)right=mid-1;else left=mid}
+ const a=seg.line.points[left],b=seg.line.points[Math.min(left+1,lengths.length-1)];
+ const span=(lengths[left+1]||lengths[left])-lengths[left],ratio=span?Math.min(1,(along-lengths[left])/span):0;
+ return {target:Math.min(scene.length,seg.line.start+left+ratio),tip:a.map((v,i)=>v+(b[i]-v)*ratio),drawing:true}
+}
+async function prepareColorSchedule(scene){
+ if(scene.mode!=='original')return;
+ const deadline=Date.now()+15000;
+ while(!colorSchedule(scene)){
+  if(Date.now()>deadline){failScheduleWorker();schedules.set(scene.lines,{w:scene.src.width,h:scene.src.height,plan:linearColorSchedule(scene)});break}
+  await new Promise(resolve=>setTimeout(resolve,15))
+ }
 }

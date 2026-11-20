@@ -1,0 +1,112 @@
+{
+  "offline": {
+    "file": "6-scenes-1080p.webm",
+    "probe": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "vp8",
+          "codec_type": "video",
+          "width": 1920,
+          "height": 1080,
+          "nb_read_frames": "1720"
+        },
+        {
+          "codec_name": "opus",
+          "codec_type": "audio",
+          "nb_read_frames": "3582"
+        }
+      ],
+      "format": {
+        "duration": "71.640000"
+      }
+    },
+    "scene_motion_checks": [
+      {
+        "scene": 1,
+        "early_to_mid_pixel_difference": 19.711,
+        "mid_to_end_pixel_difference": 14.002
+      },
+      {
+        "scene": 2,
+        "early_to_mid_pixel_difference": 18.619,
+        "mid_to_end_pixel_difference": 15.669
+      },
+      {
+        "scene": 3,
+        "early_to_mid_pixel_difference": 19.032,
+        "mid_to_end_pixel_difference": 14.42
+      },
+      {
+        "scene": 4,
+        "early_to_mid_pixel_difference": 15.948,
+        "mid_to_end_pixel_difference": 17.565
+      },
+      {
+        "scene": 5,
+        "early_to_mid_pixel_difference": 15.555,
+        "mid_to_end_pixel_difference": 19.022
+      },
+      {
+        "scene": 6,
+        "early_to_mid_pixel_difference": 19.492,
+        "mid_to_end_pixel_difference": 21.189
+      }
+    ]
+  },
+  "compatible": {
+    "file": "6-scenes-live-720p.webm",
+    "probe": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "vp9",
+          "codec_type": "video",
+          "width": 1280,
+          "height": 720,
+          "nb_read_frames": "1649"
+        },
+        {
+          "codec_name": "opus",
+          "codec_type": "audio",
+          "nb_read_frames": "1193"
+        }
+      ],
+      "format": {}
+    },
+    "scene_motion_checks": [
+      {
+        "scene": 1,
+        "early_to_mid_pixel_difference": 20.441,
+        "mid_to_end_pixel_difference": 15.822
+      },
+      {
+        "scene": 2,
+        "early_to_mid_pixel_difference": 20.112,
+        "mid_to_end_pixel_difference": 17.709
+      },
+      {
+        "scene": 3,
+        "early_to_mid_pixel_difference": 22.334,
+        "mid_to_end_pixel_difference": 15.983
+      },
+      {
+        "scene": 4,
+        "early_to_mid_pixel_difference": 18.978,
+        "mid_to_end_pixel_difference": 18.023
+      },
+      {
+        "scene": 5,
+        "early_to_mid_pixel_difference": 19.997,
+        "mid_to_end_pixel_difference": 20.017
+      },
+      {
+        "scene": 6,
+        "early_to_mid_pixel_difference": 20.855,
+        "mid_to_end_pixel_difference": 22.457
+      }
+    ]
+  }
+}

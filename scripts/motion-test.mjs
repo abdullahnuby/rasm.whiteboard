@@ -53,7 +53,7 @@ const frames=[false,true,false].map(flat=>({
 }));
 const hands=[];
 const render=vm.runInNewContext(frameCode+';render',{
- sceneSeconds:core.sceneSeconds,strokeProgress:core.strokeProgress,scenes:frames,board:{width:128,height:72},ctx:canvasContext,range:{},el:()=>({}),cache:{},total:()=>6,
+ formatClock:t=>String(t),sceneSeconds:core.sceneSeconds,strokeProgress:core.strokeProgress,scenes:frames,board:{width:128,height:72},ctx:canvasContext,range:{},el:()=>({}),cache:{},total:()=>6,
  surface:()=>({getContext:()=>canvasContext}),colorSchedule,revealPixels,overlayEnabled:core.overlayEnabled,drawHand:(_,x,y)=>hands.push([x,y])
 });
 for(const t of [.8,2.8,4.8,2.4]){const before=hands.length;render(t);assert.equal(hands.length,before+1)}
@@ -72,7 +72,18 @@ const spaced={length:4,lines:[{start:0,points:[[0,0],[1,0]]},{start:2,points:[[1
 const halfway=core.strokeProgress(spaced,.5);
 assert.equal(halfway.target,2);assert.equal(halfway.tip[0],6);
 assert.equal(core.strokeProgress(spaced,1).target,4);
-const interpolated=core.strokeProgress(spaced,12.5/14);
+const interpolated=core.strokeProgress(spaced,11.5/12);
 assert.equal(interpolated.drawing,true);
 assert.ok(Math.abs(interpolated.target-2.5)<1e-9);
 assert.ok(Math.abs(interpolated.tip[0]-11.5)<1e-9);
+
+// Equal physical distances must consume equal time even if point density differs.
+const uneven={length:4,lines:[{start:0,points:[[0,0],[1,0],[100,0],[101,0]]}]};
+const middle=core.strokeProgress(uneven,.5);
+assert.ok(Math.abs(middle.tip[0]-50.5)<1e-6);
+const near=core.strokeProgress(uneven,.01);
+assert.ok(near.target<2,'Dense and sparse sections must use arc length');
+const routed=vm.runInNewContext((await readFile('dist/motion.js','utf8'))+';routeStrokes');
+const far={points:[[90,0],[100,0]]},close={points:[[12,0],[20,0]]},origin={points:[[0,0],[10,0]]};
+const route=routed([origin,far,close]);
+assert.equal(route[1].points,close.points,'Nearby strokes must precede distant strokes');
