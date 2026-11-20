@@ -71,7 +71,7 @@ function requestColorSchedule(scene){
 function colorSchedule(scene){
  const cached=schedules.get(scene.lines);
  if(cached&&cached.w===scene.src.width&&cached.h===scene.src.height)return cached.plan;
- requestColorSchedule(scene);return null;
+ requestColorSchedule(scene);return schedules.get(scene.lines)?.plan||null;
 }
 function buildColorSchedule(scene){
  const w=scene.src.width,h=scene.src.height,n=w*h;
