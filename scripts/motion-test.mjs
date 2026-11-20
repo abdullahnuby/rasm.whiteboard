@@ -18,6 +18,14 @@ const scene={src:{width:100,height:100},zones:[{x:0,y:0,w:.3,h:.3}],baseLines:[f
 core.applyZones(scene);
 assert.equal(scene.lines[0].points,second.points);
 assert.equal(scene.lines[1].start,2);
+const centerStroke={points:[[50,50],[60,50]]};
+const adaptive={src:{width:100,height:100},zones:[],baseLines:[first,second],centerBaseLines:[centerStroke],motionStyle:'smart'};
+core.applyZones(adaptive);
+assert.equal(adaptive.lines[0].points,centerStroke.points);
+assert.equal(adaptive.length,2);
+adaptive.motionStyle='contour';core.applyZones(adaptive);
+assert.equal(adaptive.lines[0].points,first.points);
+assert.equal(adaptive.length,4);
 if(process.argv[2]){
  const bytes=await readFile(process.argv[2]);
  assert.equal(core.edgeSkinRegion(bytes,485,493),true);
