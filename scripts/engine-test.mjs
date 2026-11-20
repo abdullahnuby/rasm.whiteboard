@@ -51,6 +51,10 @@ paintRect(horizontal, 64, 6, 22, 56, 25);
 const horizontalResult = engine.extractPaths(horizontal, 64, 48);
 assertPathsValid(horizontalResult, 64, 48);
 assert.ok(horizontalResult.metrics.edgePixels > 0);
+assert.ok(Array.isArray(horizontalResult.centerLines) && horizontalResult.centerLines.length > 0,
+  'A thick marker stroke should produce a centerline writing path');
+assert.ok(horizontalResult.centerLength < horizontalResult.length,
+  'Centerline motion should use fewer points than tracing both stroke borders');
 
 // Exercise image-edge handling: disconnected pixels at opposite ends must
 // never be joined by accidental linear-index wraparound.
