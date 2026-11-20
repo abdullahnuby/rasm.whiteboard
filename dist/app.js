@@ -56,20 +56,24 @@ function render(t){
   if(!original)path(cache.c,line.points,mode==='color'?line.color:'#29362e',s.weight);
   cache.idx++
  }
- if(original){
-  if(!cache.pixels){
+ if(original&&!cache.pixels){
+  const plan=colorSchedule(s);
+  if(plan){
    const data=s.src.getContext('2d').getImageData(0,0,s.src.width,s.src.height);
    const image=cache.c.createImageData(s.src.width,s.src.height);
-   cache.pixels={...colorSchedule(s),source:new Uint32Array(data.data.buffer),output:new Uint32Array(image.data.buffer),image,count:0}
+   cache.pixels={...plan,source:new Uint32Array(data.data.buffer),output:new Uint32Array(image.data.buffer),image,count:0};
   }
+ }
+ if(original&&cache.pixels){
   let reveal=frac/.96;
   if(s.length)reveal=frac<.86?target/s.length*230/256:(230+(frac-.86)/.10*26)/256;
   if(revealPixels(cache.pixels,Math.min(1,reveal)))cache.c.putImageData(cache.pixels.image,0,0)
  }
  cache.t=target;const sc=Math.min(W/s.src.width,H/s.src.height)*.96,ox=(W-sc*s.src.width)/2,oy=(H-sc*s.src.height)/2;
  ctx.save();ctx.translate(ox,oy);ctx.scale(sc,sc);ctx.drawImage(cache.lay,0,0);
+ if(original&&!cache.pixels){const reveal=Math.min(1,frac/.96);ctx.save();ctx.beginPath();ctx.rect(0,0,s.src.width,s.src.height*reveal);ctx.clip();ctx.drawImage(s.src,0,0);ctx.restore()}
  const l=s.lines[cache.idx];if(l){const visible=Math.max(1,target-l.start);tip=motion.tip||l.points[visible-1];if(!original)path(ctx,l.points.slice(0,visible),mode==='color'?l.color:'#29362e',s.weight)}
- if(!tip && original && !s.length && frac<.96){
+ if(!tip && original && !s.length && frac<.96 && cache.pixels){
   const pixels=cache.pixels;
   const pixel=pixels.order[Math.max(0,pixels.count-1)];
   tip=[pixel%s.src.width,Math.floor(pixel/s.src.width)]
@@ -81,7 +85,19 @@ function render(t){
  if(typeof recordExportFrame==='function')recordExportFrame()
 }
 function stop(){if(typeof stopSound==='function')stopSound();running=false;cancelAnimationFrame(frame);el('play').textContent='▶'}
-function run(end){stop();if(typeof startSound==='function')startSound(time);running=true;start=performance.now()-time*1000;el('play').textContent='Ⅱ';function tick(now){time=Math.min(total(),Math.max(0,(now-start)/1000));render(time);if(exportSession&&!exportSession.cancelled){const pct=Math.min(100,total()?time/total()*100:100);el('exportProgress').value=pct;el('exportPercent').textContent=Math.floor(pct)+'%';el('exportElapsed').textContent=time.toFixed(1)+' / '+total().toFixed(1)+' ثانية'}if(time>=total()){stop();if(end)end()}else frame=requestAnimationFrame(tick)}frame=requestAnimationFrame(tick)}
+function run(end){
+ stop();if(typeof startSound==='function')startSound(time);running=true;start=performance.now()-time*1000;el('play').textContent='Ⅱ';
+ let lastPaint=-Infinity;const frameInterval=1000/30;
+ function tick(now){
+  time=Math.min(total(),Math.max(0,(now-start)/1000));
+  if(now-lastPaint>=frameInterval||time>=total()){
+   lastPaint=now;render(time);
+   if(exportSession&&!exportSession.cancelled){const pct=Math.min(100,total()?time/total()*100:100);el('exportProgress').value=pct;el('exportPercent').textContent=Math.floor(pct)+'%';el('exportElapsed').textContent=time.toFixed(1)+' / '+total().toFixed(1)+' ثانية'}
+  }
+  if(time>=total()){stop();if(end)end()}else frame=requestAnimationFrame(tick)
+ }
+ frame=requestAnimationFrame(tick)
+}
 
 function updateTimelinePlayhead(t){
  const playhead=el('timelinePlayhead');if(playhead)playhead.style.left=(Math.max(0,t)*timelineScale)+'px';
@@ -161,7 +177,9 @@ function pick(i){stop();selected=i;time=offset(i)+sceneSeconds(scenes[i])*.75;re
 function refresh(){const current=scenes[selected]||defaults;el('speed').value=current.speed||1;el('sceneTime').textContent=scenes.length?'مدة المشهد بعد ضبط السرعة: '+sceneSeconds(current).toFixed(1)+' ث':'';el('sourceHand').value=current.sourceHand;el('handSize').value=current.handSize;el('sizeValue').value=current.handSize+'%';el('weight').value=current.weight;el('zoneEdit').disabled=!scenes.length;el('handState').textContent=current.sourceHand==='present'?'إيد الصورة الأصلية فقط':current.handHint&&current.sourceHand==='auto'?'لو الصورة فيها إيد فعلًا، اختار «الصورة فيها إيد بالفعل».':current.handHint&&current.sourceHand==='detect'?'تم إخفاء الإيد بناءً على الفحص.':'';el('style').value=current.mode;el('side').value=current.side;el('paper').value=current.paper;el('hold').value=current.hold;el('holdValue').value=current.hold+'%';el('transition').value=current.transition;el('sceneName').value=current.name||'';document.querySelectorAll('#hands button').forEach((b,i)=>b.classList.toggle('active',Number(b.dataset.tone)===current.tone));range.max=total();el('duration').value=scenes.length?sceneSeconds(scenes[selected]).toFixed(1):'6';el('count').textContent=scenes.length+' مشاهد';el('cards').replaceChildren();scenes.forEach((s,i)=>{const b=document.createElement('button');b.className='card'+(i===selected?' active':'');const img=new Image();img.src=s.thumb;const caption=document.createElement('span');caption.textContent=(i+1)+' · '+s.name;b.append(img,caption);b.onclick=()=>pick(i);el('cards').append(b)});
  el('earlier').disabled=selected<=0;el('later').disabled=selected>=scenes.length-1;for(const id of ['export','play','remove','duration','seek'])el(id).disabled=!scenes.length;
  if(!scenes.length){el('clock').textContent='0 s';el('meta').textContent='';range.value=0}renderTimeline();render(time)}
-function size(){const r=+el('ratio').value,long=+el('quality').value;board.width=r>=1?long:Math.round(long*r/2)*2;board.height=r>=1?Math.round(long/r/2)*2:long;render(time)}
+function setBoardResolution(longEdge){const r=+el('ratio').value;const width=r>=1?longEdge:Math.round(longEdge*r/2)*2;const height=r>=1?Math.round(longEdge/r/2)*2:longEdge;if(board.width!==width||board.height!==height){board.width=width;board.height=height}render(time)}
+function size(){setBoardResolution(Math.min(960,+el('quality').value))}
+function exportSize(){setBoardResolution(+el('quality').value)}
 function move(d){let j=selected+d;[scenes[selected],scenes[j]]=[scenes[j],scenes[selected]];pick(j)}
 el('earlier').onclick=()=>move(-1);el('later').onclick=()=>move(1);el('remove').onclick=()=>{stop();removedScenes.push({at:selected,scene:scenes[selected]});el('undoRemove').disabled=false;scenes.splice(selected,1);if(scenes.length)pick(Math.min(selected,scenes.length-1));else{time=selected=0;refresh()}};
 el('duration').onchange=e=>{if(!scenes[selected])return;scenes[selected].duration=RasmTimeline.durationForSeconds(e.target.value,scenes[selected].speed);pick(selected);queueSave()};
@@ -247,12 +265,12 @@ el('export').onclick=async()=>{
  const lock=flag=>{document.querySelector('main .grid').inert=flag;document.querySelector('.intro').inert=flag;el('export').disabled=flag;el('projectMenu').disabled=flag;recording=flag};
  const showStopped=label=>{el('exportCancel').hidden=true;el('exportCancel').disabled=false;el('exportClose').hidden=false;el('exportLabel').textContent=label};
  try{
-  lock(true);stop();time=0;size();el('exportPanel').hidden=false;el('exportCancel').hidden=false;el('exportCancel').disabled=false;el('exportClose').hidden=true;
+  lock(true);stop();time=0;exportSize();el('exportPanel').hidden=false;el('exportCancel').hidden=false;el('exportCancel').disabled=false;el('exportClose').hidden=true;
   const preview=el('exportPreview');preview.pause();preview.hidden=true;
   el('exportLabel').textContent='تجهيز محرك التصدير…';el('exportProgress').value=0;el('exportPercent').textContent='0%';el('exportElapsed').textContent='0.0 / '+total().toFixed(1)+' ثانية';
   if(scenes.some(s=>s.tone===4&&overlayEnabled(s)))await photoHand.decode();
   await readySound();
-  if(session.cancelled){lock(false);exportSession=null;showStopped('تم إلغاء التصدير');return}
+  if(session.cancelled){lock(false);size();exportSession=null;showStopped('تم إلغاء التصدير');return}
   // Capture every completed paint explicitly when the browser exposes requestFrame().
   try{
    stream=board.captureStream(0);session.videoTrack=stream.getVideoTracks()[0];
@@ -272,7 +290,7 @@ el('export').onclick=async()=>{
    if(rec.state!=='inactive')rec.stop();
   };
   rec.onstop=()=>{
-   recordBus=null;stream.getTracks().forEach(track=>track.stop());lock(false);
+   recordBus=null;stream.getTracks().forEach(track=>track.stop());lock(false);size();
    const cancelled=session.cancelled,failed=session.failed;exportSession=null;
    if(cancelled){showStopped('تم إلغاء التصدير');el('exportPercent').textContent='—';el('exportElapsed').textContent='لم يتم إنشاء ملف';msg.textContent='تم إلغاء عملية التصدير.';return}
    const actualMime=rec.mimeType||chunks.find(chunk=>chunk.type)?.type||mimeType||'video/webm';
@@ -300,7 +318,7 @@ el('export').onclick=async()=>{
    },180);
   });
  }catch(error){
-  recordBus=null;stream?.getTracks().forEach(track=>track.stop());lock(false);exportSession=null;
+  recordBus=null;stream?.getTracks().forEach(track=>track.stop());lock(false);size();exportSession=null;
   showStopped('تعذّر بدء التصدير');
   msg.textContent='تعذّر بدء التصدير: '+String(error?.message||error).slice(0,180);
  }

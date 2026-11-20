@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 const html = await readFile('dist/index.html', 'utf8');
 const ids = [...html.matchAll(/ id="([^"]+)"/g)].map(match => match[1]);
 assert.equal(new Set(ids).size, ids.length, 'Duplicate HTML IDs');
-for (const file of ['app.js', 'project.js', 'zones.js', 'engine.js', 'engine-worker.js', 'reliability.js', 'timeline.js', 'export.js']) {
+for (const file of ['app.js', 'project.js', 'zones.js', 'engine.js', 'engine-worker.js', 'reliability.js', 'timeline.js', 'export.js', 'motion-worker.js']) {
   const js = await readFile('dist/' + file, 'utf8');
   if (file === 'engine-worker.js') {
     assert.ok(js.includes("importScripts('engine.js')"), 'Worker must load its dependencies');
