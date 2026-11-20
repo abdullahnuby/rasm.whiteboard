@@ -3,6 +3,11 @@ const el=id=>document.getElementById(id), board=el('board'), ctx=board.getContex
 const surface=(w,h)=>Object.assign(document.createElement('canvas'),{width:w,height:h});
 let scenes=[], selected=0, time=0, running=false, recording=false, start=0, frame=0, tone=0, demo=true, loading=false, lastUrl='', activeImport=null;
 let timelineScale=40, audioTimeline=null, timelineDrag=null, exportSession=null;
+function recordExportFrame(force=false){
+ const session=exportSession;if(!recording||!session?.manualFrames||session.cancelled||!session.videoTrack?.requestFrame)return;
+ const now=performance.now();if(!RasmExport.frameDue(now,session.lastFrameAt,1000/30,force))return;
+ session.lastFrameAt=now;try{session.videoTrack.requestFrame();session.frameCount++}catch(error){session.frameErrors++;session.lastFrameError=String(error?.message||error)}
+}
 const defaults={speed:.5,mode:'original',tone:4,sourceHand:'auto',handSize:100,weight:1.4,side:'1',hold:18,paper:'#ffffff',transition:'cut'};
 const colors=['#e6af89','#986642',null], total=()=>RasmTimeline.totalSeconds(scenes), offset=i=>RasmTimeline.layout(scenes,1)[i]?.start||0;
 function setOperationStatus(label,done=0,total=1){
@@ -72,7 +77,8 @@ function render(t){
  if(mode==='fill' && frac===1){ctx.globalAlpha=Math.min(1,s.hold===0?1:(local-drawTime)/Math.min(.6,duration*s.hold/100));ctx.drawImage(s.src,0,0);ctx.globalAlpha=1}
  ctx.restore();if(tip&&overlayEnabled(s))drawHand(ctx,ox+tip[0]*sc,oy+tip[1]*sc,Math.min(W,H)/425*s.handSize/100,s.tone,s.side);
  if(s.transition==='fade'){ctx.globalAlpha=Math.max(0,1-(duration-local)/Math.min(.45,duration*.22));ctx.fillStyle=s.paper;ctx.fillRect(0,0,W,H);ctx.globalAlpha=1}
- range.value=t;range.max=total();el('clock').textContent=t.toFixed(1)+' / '+total().toFixed(1)+' s';el('meta').textContent=(i+1)+' / '+scenes.length;if(typeof updateTimelinePlayhead==='function')updateTimelinePlayhead(t)
+ range.value=t;range.max=total();el('clock').textContent=t.toFixed(1)+' / '+total().toFixed(1)+' s';el('meta').textContent=(i+1)+' / '+scenes.length;if(typeof updateTimelinePlayhead==='function')updateTimelinePlayhead(t);
+ if(typeof recordExportFrame==='function')recordExportFrame()
 }
 function stop(){if(typeof stopSound==='function')stopSound();running=false;cancelAnimationFrame(frame);el('play').textContent='▶'}
 function run(end){stop();if(typeof startSound==='function')startSound(time);running=true;start=performance.now()-time*1000;el('play').textContent='Ⅱ';function tick(now){time=Math.min(total(),Math.max(0,(now-start)/1000));render(time);if(exportSession&&!exportSession.cancelled){const pct=Math.min(100,total()?time/total()*100:100);el('exportProgress').value=pct;el('exportPercent').textContent=Math.floor(pct)+'%';el('exportElapsed').textContent=time.toFixed(1)+' / '+total().toFixed(1)+' ثانية'}if(time>=total()){stop();if(end)end()}else frame=requestAnimationFrame(tick)}frame=requestAnimationFrame(tick)}
@@ -237,38 +243,69 @@ el('exportClose').onclick=()=>{if(!exportSession)el('exportPanel').hidden=true};
 el('export').onclick=async()=>{
  if(recording||loading||!scenes.length)return;const msg=el('msg');
  if(!window.MediaRecorder||!board.captureStream){msg.textContent='التصدير غير متاح في المتصفح ده. افتح الأداة على Chrome للكمبيوتر.';return}
- let stream,rec;const session={cancelled:false,failed:false,rec:null};exportSession=session;
+ let stream,rec;const session={cancelled:false,failed:false,rec:null,manualFrames:false,videoTrack:null,lastFrameAt:-Infinity,frameCount:0,frameErrors:0};exportSession=session;
  const lock=flag=>{document.querySelector('main .grid').inert=flag;document.querySelector('.intro').inert=flag;el('export').disabled=flag;el('projectMenu').disabled=flag;recording=flag};
+ const showStopped=label=>{el('exportCancel').hidden=true;el('exportCancel').disabled=false;el('exportClose').hidden=false;el('exportLabel').textContent=label};
  try{
   lock(true);stop();time=0;size();el('exportPanel').hidden=false;el('exportCancel').hidden=false;el('exportCancel').disabled=false;el('exportClose').hidden=true;
+  const preview=el('exportPreview');preview.pause();preview.hidden=true;
   el('exportLabel').textContent='تجهيز محرك التصدير…';el('exportProgress').value=0;el('exportPercent').textContent='0%';el('exportElapsed').textContent='0.0 / '+total().toFixed(1)+' ثانية';
   if(scenes.some(s=>s.tone===4&&overlayEnabled(s)))await photoHand.decode();
   await readySound();
-  if(session.cancelled){lock(false);exportSession=null;el('exportCancel').hidden=true;el('exportClose').hidden=false;el('exportLabel').textContent='تم إلغاء التصدير';return}
-  stream=board.captureStream(30);
+  if(session.cancelled){lock(false);exportSession=null;showStopped('تم إلغاء التصدير');return}
+  // Capture every completed paint explicitly when the browser exposes requestFrame().
+  try{
+   stream=board.captureStream(0);session.videoTrack=stream.getVideoTracks()[0];
+   session.manualFrames=!!session.videoTrack&&typeof session.videoTrack.requestFrame==='function';
+   if(!session.manualFrames){stream.getTracks().forEach(track=>track.stop());stream=board.captureStream(30);session.videoTrack=stream.getVideoTracks()[0]}
+  }catch{
+   stream?.getTracks().forEach(track=>track.stop());stream=board.captureStream(30);session.videoTrack=stream.getVideoTracks()[0];session.manualFrames=false;
+  }
   if(soundBuffer){recordBus=audioContext.createMediaStreamDestination();stream.addTrack(recordBus.stream.getAudioTracks()[0])}
-  const type=['video/mp4','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(t=>MediaRecorder.isTypeSupported(t));
-  rec=new MediaRecorder(stream,type?{mimeType:type,videoBitsPerSecond:6500000}:undefined);session.rec=rec;
-  const chunks=[];rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
-  rec.onerror=()=>{session.failed=true;el('exportLabel').textContent='حدث خطأ أثناء تسجيل الفيديو';msg.textContent='تعذّر تسجيل الفيديو.';stop();if(rec.state!=='inactive')rec.stop()};
+  const mimeType=RasmExport.pickMimeType(MediaRecorder);
+  const options={videoBitsPerSecond:8500000,audioBitsPerSecond:128000};if(mimeType)options.mimeType=mimeType;
+  rec=new MediaRecorder(stream,options);session.rec=rec;
+  const chunks=[];rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data)};
+  rec.onerror=()=>{
+   session.failed=true;el('exportLabel').textContent='حدث خطأ أثناء تسجيل الفيديو';
+   msg.textContent='توقف المسجل بسبب خطأ. لم يتم اعتماد الملف الناتج.';stop();
+   if(rec.state!=='inactive')rec.stop();
+  };
   rec.onstop=()=>{
-   recordBus=null;stream.getTracks().forEach(t=>t.stop());lock(false);
+   recordBus=null;stream.getTracks().forEach(track=>track.stop());lock(false);
    const cancelled=session.cancelled,failed=session.failed;exportSession=null;
-   el('exportCancel').hidden=true;el('exportCancel').disabled=false;el('exportClose').hidden=false;
-   if(cancelled){el('exportLabel').textContent='تم إلغاء التصدير';el('exportPercent').textContent='—';el('exportElapsed').textContent='لم يتم إنشاء ملف';msg.textContent='تم إلغاء عملية التصدير.';return}
-   if(failed||!chunks.length){el('exportLabel').textContent='لم يكتمل التصدير';msg.textContent='لم يتم إنشاء ملف فيديو. جرّب متصفح Chrome محدّثًا.';return}
-   const a=el('download');if(lastUrl)URL.revokeObjectURL(lastUrl);
-   lastUrl=URL.createObjectURL(new Blob(chunks,{type:rec.mimeType}));
-   a.href=lastUrl;a.download='rasm-whiteboard.'+(rec.mimeType.includes('mp4')?'mp4':'webm');a.hidden=false;a.click();
-   el('exportProgress').value=100;el('exportPercent').textContent='100%';el('exportLabel').textContent='اكتمل التصدير · الفيديو جاهز';el('exportElapsed').textContent=total().toFixed(1)+' ثانية';msg.textContent='الفيديو جاهز للتنزيل.';
+   if(cancelled){showStopped('تم إلغاء التصدير');el('exportPercent').textContent='—';el('exportElapsed').textContent='لم يتم إنشاء ملف';msg.textContent='تم إلغاء عملية التصدير.';return}
+   const actualMime=rec.mimeType||chunks.find(chunk=>chunk.type)?.type||mimeType||'video/webm';
+   const blob=new Blob(chunks,{type:actualMime});
+   if(failed||!chunks.length||blob.size<1024){
+    showStopped('لم يكتمل التصدير');el('exportPercent').textContent='—';
+    msg.textContent='ملف التصدير فارغ أو غير مكتمل. راجع المتصفح وحاول بصيغة أخرى.';return;
+   }
+   const oldUrl=lastUrl;lastUrl=URL.createObjectURL(blob);
+   preview.src=lastUrl;preview.hidden=false;preview.load();if(oldUrl)URL.revokeObjectURL(oldUrl);
+   const a=el('download');a.href=lastUrl;a.download='rasm-whiteboard.'+RasmExport.fileExtension(actualMime);a.hidden=false;a.click();
+   el('exportProgress').value=100;el('exportPercent').textContent='100%';
+   el('exportElapsed').textContent=total().toFixed(1)+' ثانية';
+   showStopped('اكتمل التصدير · '+actualMime+' · '+(blob.size/1048576).toFixed(1)+' MB');
+   msg.textContent='تم إنشاء الفيديو. شغّل معاينة الملف الناتج قبل استخدامه.';
   };
   el('exportLabel').textContent='جاري إنشاء الفيديو من المشاهد…';rec.start(1000);
-  run(()=>{stream.getVideoTracks()[0]?.requestFrame?.();setTimeout(()=>{if(rec.state!=='inactive')rec.stop()},500)});
- }catch{
-  recordBus=null;stream?.getTracks().forEach(t=>t.stop());lock(false);exportSession=null;
-  el('exportCancel').hidden=true;el('exportClose').hidden=false;el('exportLabel').textContent='تعذّر بدء التصدير';msg.textContent='تعذّر بدء التصدير في المتصفح ده.';
+  if(session.manualFrames){session.lastFrameAt=performance.now();render(time);recordExportFrame(true)}
+  run(()=>{
+   if(session.cancelled)return;recordExportFrame(true);
+   setTimeout(()=>{
+    if(rec.state==='inactive')return;
+    try{rec.requestData()}catch{}
+    setTimeout(()=>{if(rec.state!=='inactive')rec.stop()},180);
+   },180);
+  });
+ }catch(error){
+  recordBus=null;stream?.getTracks().forEach(track=>track.stop());lock(false);exportSession=null;
+  showStopped('تعذّر بدء التصدير');
+  msg.textContent='تعذّر بدء التصدير: '+String(error?.message||error).slice(0,180);
  }
-};scenes=['التكوين الأساسي','الكتلة المعمارية','التفاصيل النهائية'].map((n,i)=>RasmImageEngine.analyze(house(i),n));selected=1;time=offset(1)+sceneSeconds(scenes[1])*.68;size();refresh();
+};
+scenes=['التكوين الأساسي','الكتلة المعمارية','التفاصيل النهائية'].map((n,i)=>RasmImageEngine.analyze(house(i),n));selected=1;time=offset(1)+sceneSeconds(scenes[1])*.68;size();refresh();
 
 el('allOriginal').onclick=()=>{if(!scenes.length)return;stop();for(const s of scenes)s.mode='original';cache={};pick(selected);queueSave();el('msg').textContent='تم تطبيق ألوان الصور الأصلية على كل المشاهد.'};
 
