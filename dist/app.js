@@ -34,13 +34,6 @@ function pathRange(c,points,from,to,ink,width=1.4){
  c.lineTo(...pointAt(points,to));
  c.strokeStyle=ink;c.lineWidth=width;c.lineJoin=c.lineCap='round';c.stroke();
 }
-function pathPartial(c,points,count,ink,width=1.4,tip=null){
- if(!points.length||count<1)return;
- c.beginPath();c.moveTo(...points[0]);
- for(let i=1;i<Math.min(count,points.length);i++)c.lineTo(...points[i]);
- if(tip)c.lineTo(...tip);
- c.strokeStyle=ink;c.lineWidth=width;c.lineJoin=c.lineCap='round';c.stroke();
-}
 function house(phase){
  const img=surface(640,360),c=img.getContext('2d');c.fillStyle='#fff';c.fillRect(0,0,640,360);
  const p=(x,y,z)=>[313+x*.94-y*.76,230+x*.28+y*.38-z];
