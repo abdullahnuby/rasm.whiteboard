@@ -44,7 +44,7 @@ for(const lines of [[],[{start:0,points:[[0,0],[1,0],[2,0]]}]]){
 const app=await readFile('dist/app.js','utf8');
 const frameCode=app.slice(app.indexOf('function render(t)'),app.indexOf('function stop()'));
 const imageData=(w,h)=>({data:new Uint8ClampedArray(w*h*4)});
-const canvasContext={fillRect(){},save(){},restore(){},translate(){},scale(){},drawImage(){},createImageData:imageData,putImageData(){}};
+let lineToCount=0;const canvasContext={fillRect(){},save(){},restore(){},translate(){},scale(){},drawImage(){},beginPath(){},moveTo(){},lineTo(){lineToCount++},stroke(){},createImageData:imageData,putImageData(){}};
 const strokes=[{start:0,points:[[0,0],[1,0],[1,1],[2,1]]}];
 const frames=[false,true,false].map(flat=>({
  duration:2,hold:10,mode:'original',tone:4,side:'1',handSize:100,sourceHand:'auto',handHint:flat,lines:flat?[]:strokes,length:flat?0:4,
@@ -57,6 +57,12 @@ const render=vm.runInNewContext(frameCode+';render',{
 });
 for(const t of [.8,2.8,4.8,2.4]){const before=hands.length;render(t);assert.equal(hands.length,before+1)}
 frames[1].sourceHand='present';render(2.8);assert.equal(hands.length,4);
+frames[0].mode='ink';frames[0].hold=0;
+frames[0].lines=[{start:0,points:Array.from({length:100},(_,i)=>[i,0])}];frames[0].length=100;
+const beforeInk=lineToCount;render(.5);const firstInk=lineToCount-beforeInk;
+render(1);const secondInk=lineToCount-beforeInk;
+assert.ok(firstInk>0&&secondInk-firstInk>0,'Incremental hand path should add visible segments');
+assert.ok(secondInk<firstInk*1.65,'Previously painted path segments must not be redrawn on every frame');
 
 assert.equal(core.sceneSeconds({duration:6,speed:.5}),12);
 assert.equal(core.sceneSeconds({duration:6,speed:.1}),60);
