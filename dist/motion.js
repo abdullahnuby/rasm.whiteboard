@@ -18,10 +18,13 @@ function edgeSkinRegion(data,w,h){
 }
 function overlayEnabled(s){return s.tone!==2&&s.sourceHand!=='present'&&(s.sourceHand!=='detect'||!s.handHint)}
 function applyZones(scene){
+ const center=scene.motionStyle!=='contour'&&Array.isArray(scene.centerBaseLines)&&scene.centerBaseLines.length>0;
+ const source=center?scene.centerBaseLines:scene.baseLines;
  const zones=scene.zones,groups=Array.from({length:zones.length+1},()=>[]);
- for(const line of scene.baseLines){const point=line.points[Math.floor(line.points.length/2)],x=point[0]/scene.src.width,y=point[1]/scene.src.height;
+ for(const line of source){const point=line.points[Math.floor(line.points.length/2)],x=point[0]/scene.src.width,y=point[1]/scene.src.height;
  const idx=zones.findIndex(z=>x>=z.x&&y>=z.y&&x<=z.x+z.w&&y<=z.y+z.h);groups[idx<0?zones.length:idx].push(line)}
- let start=0;scene.lines=groups.flat().map(line=>{const result={...line,start};start+=line.points.length;return result})
+ let start=0;scene.lines=groups.flat().map(line=>{const result={...line,start};start+=line.points.length;return result});
+ scene.length=start;scene.usingCenterline=center
 }
 
 // Map each source pixel to a reveal time. Interior pixels follow their
