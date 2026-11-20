@@ -5,10 +5,10 @@ let scenes=[], selected=0, time=0, running=false, recording=false, start=0, fram
 let timelineScale=40, audioTimeline=null, timelineDrag=null, exportSession=null;
 function recordExportFrame(force=false){
  const session=exportSession;if(!recording||!session?.manualFrames||session.cancelled||!session.videoTrack?.requestFrame)return;
- const now=performance.now();if(!RasmExport.frameDue(now,session.lastFrameAt,1000/30,force))return;
+ const now=performance.now();if(!RasmExport.frameDue(now,session.lastFrameAt,1000/24,force))return;
  session.lastFrameAt=now;try{session.videoTrack.requestFrame();session.frameCount++}catch(error){session.frameErrors++;session.lastFrameError=String(error?.message||error)}
 }
-const defaults={speed:.5,mode:'original',tone:4,sourceHand:'auto',handSize:100,weight:1.4,side:'1',hold:18,paper:'#ffffff',transition:'cut'};
+const defaults={speed:.5,motionStyle:'smart',mode:'original',tone:4,sourceHand:'auto',handSize:100,weight:1.4,side:'1',hold:18,paper:'#ffffff',transition:'cut'};
 const colors=['#e6af89','#986642',null], total=()=>RasmTimeline.totalSeconds(scenes), offset=i=>RasmTimeline.layout(scenes,1)[i]?.start||0;
 function setOperationStatus(label,done=0,total=1){
  const panel=el('operationStatus');if(!panel)return;
@@ -23,6 +23,17 @@ function prewarmColorSchedules(items){
  setTimeout(warmNext,0);
 }
 function path(c,points,ink,width=1.4){c.beginPath();c.moveTo(...points[0]);for(let i=1;i<points.length;i++)c.lineTo(...points[i]);c.strokeStyle=ink;c.lineWidth=width;c.lineJoin=c.lineCap='round';c.stroke()}
+function pointAt(points,position){
+ const p=Math.max(0,Math.min(points.length-1,position)),i=Math.floor(p),f=p-i,a=points[i],b=points[Math.min(points.length-1,i+1)];
+ return f? a.map((v,k)=>v+(b[k]-v)*f):a;
+}
+function pathRange(c,points,from,to,ink,width=1.4){
+ if(!points.length||to<=from)return;
+ c.beginPath();c.moveTo(...pointAt(points,from));
+ for(let i=Math.floor(from)+1;i<to;i++)c.lineTo(...points[i]);
+ c.lineTo(...pointAt(points,to));
+ c.strokeStyle=ink;c.lineWidth=width;c.lineJoin=c.lineCap='round';c.stroke();
+}
 function pathPartial(c,points,count,ink,width=1.4,tip=null){
  if(!points.length||count<1)return;
  c.beginPath();c.moveTo(...points[0]);
@@ -63,10 +74,16 @@ function render(t){
  if(cache.s!==s || cache.mode!==mode || cache.weight!==s.weight || target<cache.t){let lay=surface(s.src.width,s.src.height);cache={s,mode,weight:s.weight,lay,c:lay.getContext('2d'),idx:0,t:0}}
  let tip;
  const original=mode==='original';
- while(cache.idx<s.lines.length){
-  const line=s.lines[cache.idx];if(line.start+line.points.length>target)break;
-  if(!original)path(cache.c,line.points,mode==='color'?line.color:'#29362e',s.weight);
-  cache.idx++
+ if(!original){
+  let cursor=cache.paintedThrough||0;
+  while(cache.idx<s.lines.length){
+   const line=s.lines[cache.idx],end=line.start+line.points.length;
+   if(target<=line.start)break;
+   const from=Math.max(0,cursor-line.start),to=Math.min(line.points.length,target-line.start);
+   if(to>from)pathRange(cache.c,line.points,from,to,mode==='color'?line.color:'#29362e',s.weight);
+   if(to>=line.points.length){cache.idx++;cursor=end;cache.paintedThrough=cursor}
+   else break;
+  }
  }
  if(original&&!cache.pixels){
   const plan=colorSchedule(s);
@@ -84,7 +101,7 @@ function render(t){
  cache.t=target;const sc=Math.min(W/s.src.width,H/s.src.height)*.96,ox=(W-sc*s.src.width)/2,oy=(H-sc*s.src.height)/2;
  ctx.save();ctx.translate(ox,oy);ctx.scale(sc,sc);ctx.drawImage(cache.lay,0,0);
  if(original&&!cache.pixels){const reveal=Math.min(1,frac/.96);ctx.save();ctx.beginPath();ctx.rect(0,0,s.src.width,s.src.height*reveal);ctx.clip();ctx.drawImage(s.src,0,0);ctx.restore()}
- const l=s.lines[cache.idx];if(l){const position=Math.max(0,target-l.start),visible=motion.drawing?Math.max(1,Math.floor(position)+1):0;tip=motion.tip||(visible?l.points[visible-1]:null);if(!original&&visible)pathPartial(ctx,l.points,visible,mode==='color'?l.color:'#29362e',s.weight,motion.drawing&&position%1>0?motion.tip:null)}
+ tip=motion.tip||null;
  if(!tip && original && !s.length && frac<.96 && cache.pixels){
   const pixels=cache.pixels;
   const pixel=pixels.linear?Math.max(0,pixels.count-1):pixels.order[Math.max(0,pixels.count-1)];
@@ -99,7 +116,7 @@ function render(t){
 function stop(){if(typeof stopSound==='function')stopSound();running=false;cancelAnimationFrame(frame);el('play').textContent='▶'}
 function run(end){
  stop();if(typeof startSound==='function')startSound(time);running=true;start=performance.now()-time*1000;el('play').textContent='Ⅱ';
- let lastPaint=-Infinity;const frameInterval=1000/30;
+ let lastPaint=-Infinity;const frameInterval=1000/(recording?24:30);
  function tick(now){
   time=Math.min(total(),Math.max(0,(now-start)/1000));
   if(now-lastPaint>=frameInterval||time>=total()){
@@ -186,7 +203,7 @@ el('zoomOut').onclick=()=>{timelineScale=Math.max(.5,timelineScale-6);renderTime
 el('zoomFit').onclick=()=>{const seconds=Math.max(total(),audioTimeline?.duration||0);timelineScale=Math.max(.5,Math.min(80,(el('timelineScroll').clientWidth-50)/Math.max(1,seconds)));renderTimeline()};
 
 function pick(i){stop();selected=i;time=offset(i)+sceneSeconds(scenes[i])*.75;refresh();const clip=el('timelineVideoTrack').querySelector('[data-index="'+i+'"]');clip?.scrollIntoView({block:'nearest',inline:'nearest'})}
-function refresh(){const current=scenes[selected]||defaults;el('speed').value=current.speed||1;el('sceneTime').textContent=scenes.length?'مدة المشهد بعد ضبط السرعة: '+sceneSeconds(current).toFixed(1)+' ث':'';el('sourceHand').value=current.sourceHand;el('handSize').value=current.handSize;el('sizeValue').value=current.handSize+'%';el('weight').value=current.weight;el('zoneEdit').disabled=!scenes.length;el('handState').textContent=current.sourceHand==='present'?'إيد الصورة الأصلية فقط':current.handHint&&current.sourceHand==='auto'?'لو الصورة فيها إيد فعلًا، اختار «الصورة فيها إيد بالفعل».':current.handHint&&current.sourceHand==='detect'?'تم إخفاء الإيد بناءً على الفحص.':'';el('style').value=current.mode;el('side').value=current.side;el('paper').value=current.paper;el('hold').value=current.hold;el('holdValue').value=current.hold+'%';el('transition').value=current.transition;el('sceneName').value=current.name||'';document.querySelectorAll('#hands button').forEach((b,i)=>b.classList.toggle('active',Number(b.dataset.tone)===current.tone));range.max=total();el('duration').value=scenes.length?sceneSeconds(scenes[selected]).toFixed(1):'6';el('count').textContent=scenes.length+' مشاهد';el('cards').replaceChildren();scenes.forEach((s,i)=>{const b=document.createElement('button');b.className='card'+(i===selected?' active':'');const img=new Image();img.src=s.thumb;const caption=document.createElement('span');caption.textContent=(i+1)+' · '+s.name;b.append(img,caption);b.onclick=()=>pick(i);el('cards').append(b)});
+function refresh(){const current=scenes[selected]||defaults;el('speed').value=current.speed||1;el('motionStyle').value=current.motionStyle||'smart';el('sceneTime').textContent=scenes.length?'مدة المشهد بعد ضبط السرعة: '+sceneSeconds(current).toFixed(1)+' ث':'';el('sourceHand').value=current.sourceHand;el('handSize').value=current.handSize;el('sizeValue').value=current.handSize+'%';el('weight').value=current.weight;el('zoneEdit').disabled=!scenes.length;el('handState').textContent=current.sourceHand==='present'?'إيد الصورة الأصلية فقط':current.handHint&&current.sourceHand==='auto'?'لو الصورة فيها إيد فعلًا، اختار «الصورة فيها إيد بالفعل».':current.handHint&&current.sourceHand==='detect'?'تم إخفاء الإيد بناءً على الفحص.':'';el('style').value=current.mode;el('side').value=current.side;el('paper').value=current.paper;el('hold').value=current.hold;el('holdValue').value=current.hold+'%';el('transition').value=current.transition;el('sceneName').value=current.name||'';document.querySelectorAll('#hands button').forEach((b,i)=>b.classList.toggle('active',Number(b.dataset.tone)===current.tone));range.max=total();el('duration').value=scenes.length?sceneSeconds(scenes[selected]).toFixed(1):'6';el('count').textContent=scenes.length+' مشاهد';el('cards').replaceChildren();scenes.forEach((s,i)=>{const b=document.createElement('button');b.className='card'+(i===selected?' active':'');const img=new Image();img.src=s.thumb;const caption=document.createElement('span');caption.textContent=(i+1)+' · '+s.name;b.append(img,caption);b.onclick=()=>pick(i);el('cards').append(b)});
  el('earlier').disabled=selected<=0;el('later').disabled=selected>=scenes.length-1;for(const id of ['export','play','remove','duration','seek'])el(id).disabled=!scenes.length;
  if(!scenes.length){el('clock').textContent='0 s';el('meta').textContent='';range.value=0}renderTimeline();render(time)}
 function setBoardResolution(longEdge){const r=+el('ratio').value;const width=r>=1?longEdge:Math.round(longEdge*r/2)*2;const height=r>=1?Math.round(longEdge/r/2)*2:longEdge;if(board.width!==width||board.height!==height){board.width=width;board.height=height}render(time)}
@@ -197,6 +214,11 @@ el('earlier').onclick=()=>move(-1);el('later').onclick=()=>move(1);el('remove').
 el('duration').onchange=e=>{if(!scenes[selected])return;scenes[selected].duration=RasmTimeline.durationForSeconds(e.target.value,scenes[selected].speed);pick(selected);queueSave()};
 el('ratio').onchange=el('quality').onchange=size;const fields={sourceHand:'sourceHand',handSize:'handSize',weight:'weight',style:'mode',side:'side',paper:'paper',transition:'transition',sceneName:'name',hold:'hold'};
 for(const [id,key] of Object.entries(fields))el(id).onchange=()=>{if(!scenes[selected])return;scenes[selected][key]=['hold','weight','handSize'].includes(id)?Number(el(id).value):el(id).value;refresh()};
+el('motionStyle').onchange=()=>{
+ if(!scenes[selected])return;
+ scenes[selected].motionStyle=el('motionStyle').value;
+ applyZones(scenes[selected]);cache={};refresh();queueSave();
+};
 el('addFiles').onclick=()=>files.click();range.oninput=()=>{stop();time=+range.value;render(time)};
 for(const [id,label,icon] of [[4,'فوتوغرافية',''],[0,'مرسومة','✍🏻'],[1,'داكنة','✍🏾'],[2,'بدون يد','∅']]){
  const b=document.createElement('button');b.dataset.tone=id;if(id===4){const img=new Image();img.src='assets/marker-hand.webp';img.alt='';b.append(img)}else{const mark=document.createElement('b');mark.textContent=icon;b.append(mark)}b.append(label);b.onclick=()=>{if(!scenes[selected])return;scenes[selected].tone=id;refresh()};el('hands').append(b)
@@ -293,7 +315,7 @@ el('export').onclick=async()=>{
   }
   if(soundBuffer){recordBus=audioContext.createMediaStreamDestination();stream.addTrack(recordBus.stream.getAudioTracks()[0])}
   const mimeType=RasmExport.pickMimeType(MediaRecorder);
-  const options={videoBitsPerSecond:8500000,audioBitsPerSecond:128000};if(mimeType)options.mimeType=mimeType;
+  const options={videoBitsPerSecond:(+el('quality').value>=1920?6500000:3800000),audioBitsPerSecond:128000};if(mimeType)options.mimeType=mimeType;
   rec=new MediaRecorder(stream,options);session.rec=rec;
   const chunks=[];rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data)};
   rec.onerror=()=>{
@@ -319,7 +341,7 @@ el('export').onclick=async()=>{
    showStopped('اكتمل التصدير · '+actualMime+' · '+(blob.size/1048576).toFixed(1)+' MB');
    msg.textContent='تم إنشاء الفيديو. شغّل معاينة الملف الناتج قبل استخدامه.';
   };
-  el('exportLabel').textContent='جاري إنشاء الفيديو من المشاهد…';rec.start(1000);
+  el('exportLabel').textContent='جاري إنشاء الفيديو من المشاهد…';rec.start(5000);
   if(session.manualFrames){session.lastFrameAt=performance.now();render(time);recordExportFrame(true)}
   run(()=>{
    if(session.cancelled)return;recordExportFrame(true);
