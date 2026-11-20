@@ -1,6 +1,6 @@
 import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
-const types={'/assets/marker-hand.webp':'image/webp','/motion.js':'text/javascript','/zones.js':'text/javascript','/index.html':'text/html','/app.js':'text/javascript','/style.css':'text/css','/project.js':'text/javascript'};
+const types={'/assets/marker-hand.webp':'image/webp','/engine.js':'text/javascript','/engine-worker.js':'text/javascript','/motion.js':'text/javascript','/zones.js':'text/javascript','/index.html':'text/html','/app.js':'text/javascript','/style.css':'text/css','/project.js':'text/javascript'};
 createServer(async(req,res)=>{
  const path=new URL(req.url,'http://localhost').pathname;
  const key=path==='/'?'/index.html':path;
