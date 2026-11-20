@@ -178,7 +178,7 @@ async function readProject(p){
   }finally{if(blobImage)URL.revokeObjectURL(imageUrl)}
   Object.assign(s,{
    asset:row.image,
-   speed:choose(row.speed,[.25,.5,.75,1],1),
+   speed:choose(row.speed,[.1,.15,.2,.25,.35,.5,.75,1],1),
    sourceHand:choose(row.sourceHand,['auto','detect','present','clean'],'auto'),
    weight:choose(row.weight,[1,1.4,2.3],1.4),
    handSize:within(row.handSize,55,160,100),

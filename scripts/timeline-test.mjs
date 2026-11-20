@@ -5,6 +5,8 @@ const context = vm.createContext({});
 vm.runInContext(await readFile('dist/timeline.js', 'utf8'), context);
 assert.equal(vm.runInContext('RasmTimeline.sceneSeconds({duration: 3, speed: .5})', context), 6);
 assert.equal(vm.runInContext('RasmTimeline.durationForSeconds(5.4, .5)', context), 2.7);
+assert.equal(vm.runInContext('RasmTimeline.durationForSeconds(5.4, .1)', context), .54);
+assert.equal(vm.runInContext('RasmTimeline.sceneSeconds({duration: .54, speed: .1})', context), 5.4);
 assert.equal(vm.runInContext('RasmTimeline.sceneSeconds({duration: 2.7, speed: .5})', context), 5.4);
 assert.equal(vm.runInContext('RasmTimeline.clampSeconds(0)', context), 1);
 assert.equal(vm.runInContext('RasmTimeline.clampSeconds(999)', context), 180);

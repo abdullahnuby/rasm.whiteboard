@@ -51,8 +51,13 @@ for(const t of [.8,2.8,4.8,2.4]){const before=hands.length;render(t);assert.equa
 frames[1].sourceHand='present';render(2.8);assert.equal(hands.length,4);
 
 assert.equal(core.sceneSeconds({duration:6,speed:.5}),12);
+assert.equal(core.sceneSeconds({duration:6,speed:.1}),60);
 assert.equal(core.sceneSeconds({duration:6}),6);
 const spaced={length:4,lines:[{start:0,points:[[0,0],[1,0]]},{start:2,points:[[11,0],[12,0]]}]};
 const halfway=core.strokeProgress(spaced,.5);
 assert.equal(halfway.target,2);assert.equal(halfway.tip[0],6);
 assert.equal(core.strokeProgress(spaced,1).target,4);
+const interpolated=core.strokeProgress(spaced,12.5/14);
+assert.equal(interpolated.drawing,true);
+assert.ok(Math.abs(interpolated.target-2.5)<1e-9);
+assert.ok(Math.abs(interpolated.tip[0]-11.5)<1e-9);

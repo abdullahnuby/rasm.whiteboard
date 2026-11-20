@@ -23,6 +23,13 @@ function prewarmColorSchedules(items){
  setTimeout(warmNext,0);
 }
 function path(c,points,ink,width=1.4){c.beginPath();c.moveTo(...points[0]);for(let i=1;i<points.length;i++)c.lineTo(...points[i]);c.strokeStyle=ink;c.lineWidth=width;c.lineJoin=c.lineCap='round';c.stroke()}
+function pathPartial(c,points,count,ink,width=1.4,tip=null){
+ if(!points.length||count<1)return;
+ c.beginPath();c.moveTo(...points[0]);
+ for(let i=1;i<Math.min(count,points.length);i++)c.lineTo(...points[i]);
+ if(tip)c.lineTo(...tip);
+ c.strokeStyle=ink;c.lineWidth=width;c.lineJoin=c.lineCap='round';c.stroke();
+}
 function house(phase){
  const img=surface(640,360),c=img.getContext('2d');c.fillStyle='#fff';c.fillRect(0,0,640,360);
  const p=(x,y,z)=>[313+x*.94-y*.76,230+x*.28+y*.38-z];
@@ -77,7 +84,7 @@ function render(t){
  cache.t=target;const sc=Math.min(W/s.src.width,H/s.src.height)*.96,ox=(W-sc*s.src.width)/2,oy=(H-sc*s.src.height)/2;
  ctx.save();ctx.translate(ox,oy);ctx.scale(sc,sc);ctx.drawImage(cache.lay,0,0);
  if(original&&!cache.pixels){const reveal=Math.min(1,frac/.96);ctx.save();ctx.beginPath();ctx.rect(0,0,s.src.width,s.src.height*reveal);ctx.clip();ctx.drawImage(s.src,0,0);ctx.restore()}
- const l=s.lines[cache.idx];if(l){const visible=Math.max(1,target-l.start);tip=motion.tip||l.points[visible-1];if(!original)path(ctx,l.points.slice(0,visible),mode==='color'?l.color:'#29362e',s.weight)}
+ const l=s.lines[cache.idx];if(l){const position=Math.max(0,target-l.start),visible=motion.drawing?Math.max(1,Math.floor(position)+1):0;tip=motion.tip||(visible?l.points[visible-1]:null);if(!original&&visible)pathPartial(ctx,l.points,visible,mode==='color'?l.color:'#29362e',s.weight,motion.drawing&&position%1>0?motion.tip:null)}
  if(!tip && original && !s.length && frac<.96 && cache.pixels){
   const pixels=cache.pixels;
   const pixel=pixels.linear?Math.max(0,pixels.count-1):pixels.order[Math.max(0,pixels.count-1)];

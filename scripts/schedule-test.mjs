@@ -16,19 +16,15 @@ assert.ok(result.lines.length > 0);
 assert.ok(result.lines.some(l => l.points.some(p => !Number.isInteger(p[0]) || !Number.isInteger(p[1]))), 'Test must exercise fractional points');
 
 context.scene = { src: { width: W, height: H }, lines: result.lines, length: result.length };
-// Exercise the full schedule algorithm directly; the UI now runs it in a Worker.
-const plan = vm.runInContext('buildColorSchedule(scene)', context, { timeout: 5000 });
+// The timeout turns the former infinite loop into a test failure instead of a hang.
+const plan = vm.runInContext('colorSchedule(scene)', context, { timeout: 5000 });
 const n = W * H;
 assert.equal(plan.order.length, n);
 assert.equal(plan.ends[256], n, 'Every pixel needs a reveal time');
 let used = 0;
 for (let t = 0; t < 256; t++) if (plan.ends[t + 1] > plan.ends[t]) used++;
 assert.ok(used > 100, 'Reveal times should spread across the timeline');
-// Without Worker support, preview must use the fast non-blocking linear fallback.
-const fallback = vm.runInContext('colorSchedule(scene)', context, { timeout: 5000 });
-assert.equal(fallback.linear, true);
-assert.equal(fallback.order, null);
-assert.equal(vm.runInContext('colorSchedule(scene)', context), fallback, 'Fallback should be memoized per scene');
+assert.equal(vm.runInContext('colorSchedule(scene)', context), plan, 'Schedule should be memoized per scene');
 // The first animation frame can be timestamped slightly before `start`, giving a negative fraction.
 for (const f of [-0.5, -1e-6, NaN, 0, 1, 2]) {
   context.f = f;

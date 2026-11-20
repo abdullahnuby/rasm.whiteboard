@@ -1,3 +1,10 @@
+## 4.3.1 — Hand speed and motion smoothness
+- Add slower hand-speed presets down to 0.1×; slower settings extend the scene duration so the full drawing can finish.
+- Interpolate the drawing-hand tip between path samples for smoother movement at playback frame intervals.
+- Draw the active path incrementally without allocating a new sliced point array on every frame.
+- Preserve and restore the new speed presets in existing `.rasm` projects.
+- Add tests for slow-speed duration conversion and fractional hand interpolation.
+
 # Changelog
 
 ## 4.0.0 — Image Engine foundation
