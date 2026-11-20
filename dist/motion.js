@@ -132,8 +132,8 @@ function strokeProgress(scene,fraction){
  }
  const position=Math.max(0,Math.min(seg.line.points.length,distance-seg.draw));
  const pointIndex=Math.min(seg.line.points.length-1,Math.floor(position));
- const fraction=position-pointIndex;
+ const pointFraction=position-pointIndex;
  const current=seg.line.points[pointIndex],next=seg.line.points[Math.min(seg.line.points.length-1,pointIndex+1)];
- const tip=fraction>0?current.map((value,i)=>value+(next[i]-value)*fraction):current;
+ const tip=pointFraction>0?current.map((value,i)=>value+(next[i]-value)*pointFraction):current;
  return {target:Math.min(scene.length,seg.line.start+position),tip,drawing:true}
 }
