@@ -1,7 +1,7 @@
 'use strict';
 const el=id=>document.getElementById(id), board=el('board'), ctx=board.getContext('2d'), range=el('seek'), files=el('files');
 const surface=(w,h)=>Object.assign(document.createElement('canvas'),{width:w,height:h});
-let scenes=[], selected=0, time=0, running=false, recording=false, start=0, frame=0, tone=0, demo=true, loading=false, lastUrl='';
+let scenes=[], selected=0, time=0, running=false, recording=false, start=0, frame=0, tone=0, demo=true, loading=false, lastUrl='', activeImport=null;
 const defaults={speed:.5,mode:'original',tone:4,sourceHand:'auto',handSize:100,weight:1.4,side:'1',hold:18,paper:'#ffffff',transition:'cut'};
 const colors=['#e6af89','#986642',null], total=()=>scenes.reduce((a,s)=>a+sceneSeconds(s),0), offset=i=>scenes.slice(0,i).reduce((a,s)=>a+sceneSeconds(s),0);
 function path(c,points,ink,width=1.4){c.beginPath();c.moveTo(...points[0]);for(let i=1;i<points.length;i++)c.lineTo(...points[i]);c.strokeStyle=ink;c.lineWidth=width;c.lineJoin=c.lineCap='round';c.stroke()}
@@ -84,10 +84,66 @@ for(const [id,label,icon] of [[4,'فوتوغرافية',''],[0,'مرسومة','�
 }
 const digits=s=>s.replace(/[٠-٩]/g,ch=>String(ch.charCodeAt(0)-1632)).replace(/[۰-۹]/g,ch=>String(ch.charCodeAt(0)-1776)),cmp=new Intl.Collator('ar',{numeric:true});
 const MAX_IMAGES=150,MAX_IMAGE_BYTES=25*1048576;
-async function importFiles(items){if(recording||loading)return;loading=true;stop();let added=[],bad=0;if(items.length>MAX_IMAGES){bad+=items.length-MAX_IMAGES;items=items.slice(0,MAX_IMAGES)}try{for(const f of items){if(f.size>MAX_IMAGE_BYTES){bad++;continue}el('msg').textContent='جاري تجهيز '+f.name;let url=URL.createObjectURL(f);try{const im=new Image();im.src=url;await im.decode();added.push(await RasmImageEngine.analyzeAsync(im,f.name))}catch{bad++}finally{URL.revokeObjectURL(url)}}
- if(added.length){if(demo){scenes=[];clearRemoved()}demo=false;added.sort((a,b)=>cmp.compare(digits(a.name),digits(b.name)));const first=scenes.length;scenes.push(...added);pick(first);queueSave()}
- el('msg').textContent=(added.length?'تم تجهيز '+added.length+' مشهد. ':'')+(bad?'تعذّر فتح '+bad+' ملف.':'')
- }finally{loading=false;files.value=''}}
+const MAX_PROJECT_PIXELS=48_000_000,MAX_PROJECT_SCENES=150;
+const IMAGE_EXT=/\.(png|jpe?g|webp|gif|bmp|avif|heic|heif)$/i;
+function isImageFile(file){return file?.type?.startsWith('image/')||IMAGE_EXT.test(file?.name||'')}
+function currentProjectPixels(){return demo?0:scenes.reduce((sum,scene)=>sum+(scene.src?.width||0)*(scene.src?.height||0),0)}
+function updateBatchStatus(label,done,total){
+ const status=el('batchStatus'),progress=el('batchProgress'),count=el('batchCount'),text=el('batchLabel');
+ status.hidden=false;text.textContent=label;progress.max=Math.max(1,total);progress.value=Math.min(done,total);
+ count.textContent=done+' / '+total;
+}
+el('batchCancel').onclick=()=>{
+ if(!activeImport)return;
+ activeImport.cancelled=true;
+ el('batchCancel').disabled=true;
+ el('batchLabel').textContent='جاري إنهاء الصورة الحالية…';
+};
+async function importFiles(items){
+ if(recording||loading||activeImport)return;
+ const all=[...items],imageItems=all.filter(isImageFile);
+ const unknown=all.length-imageItems.length;
+ if(!imageItems.length){el('msg').textContent=unknown?'لم يتم العثور على ملفات صور صالحة.':'اختار صورًا للرفع.';return}
+ imageItems.sort((a,b)=>cmp.compare(digits(a.name),digits(b.name)));
+ const availableSlots=Math.max(0,MAX_PROJECT_SCENES-(demo?0:scenes.length));
+ let bad=Math.max(0,imageItems.length-availableSlots)+unknown;
+ const candidates=imageItems.slice(0,availableSlots);
+ const controller={cancelled:false};activeImport=controller;
+ const added=[];let done=0,projectPixels=currentProjectPixels();
+ stop();busy(true);el('batchCancel').disabled=false;
+ updateBatchStatus('بدء تجهيز الصور…',0,candidates.length);
+ try{
+  for(const file of candidates){
+   if(controller.cancelled)break;
+   done++;
+   if(file.size>MAX_IMAGE_BYTES){bad++;updateBatchStatus('تخطي '+file.name+' · أكبر من 25 ميجابايت',done,candidates.length);continue}
+   const url=URL.createObjectURL(file);
+   try{
+    const img=new Image();img.src=url;await img.decode();
+    const dimensions=RasmReliability.fitDimensions(img.naturalWidth||img.width,img.naturalHeight||img.height,960,720);
+    if(!dimensions||!RasmReliability.withinPixelBudget(projectPixels,dimensions.pixels,MAX_PROJECT_PIXELS)){
+     bad++;updateBatchStatus('تم تخطي '+file.name+' · حد ذاكرة المشروع',done,candidates.length);continue;
+    }
+    updateBatchStatus('تحليل '+file.name,done-1,candidates.length);
+    const scene=await RasmImageEngine.analyzeAsync(img,file.name);
+    added.push(scene);projectPixels+=dimensions.pixels;
+    updateBatchStatus('تم تجهيز '+added.length+' صورة · '+file.name,done,candidates.length);
+   }catch{bad++;updateBatchStatus('تعذّر فتح '+file.name,done,candidates.length)}
+   finally{URL.revokeObjectURL(url)}
+  }
+  if(added.length){
+   if(demo){scenes=[];clearRemoved()}
+   demo=false;
+   const first=scenes.length;scenes.push(...added);pick(first);queueSave();
+  }
+  const cancelled=controller.cancelled;
+  el('msg').textContent=(added.length?'تم تجهيز '+added.length+' مشهد. ':'')+
+   (bad?' تم تخطي '+bad+' ملف. ':'')+
+   (cancelled?'تم إلغاء الدفعة بعد اكتمال الصورة الحالية.':unknown?'تم تجاهل الملفات غير المدعومة.':'');
+ }finally{
+  activeImport=null;el('batchStatus').hidden=true;el('batchCancel').disabled=false;busy(false);files.value='';
+ }
+}
 files.onchange=async()=>{const items=[...files.files];files.value='';await importMedia(items)};document.ondragover=e=>e.preventDefault();document.ondrop=e=>{e.preventDefault();importMedia([...e.dataTransfer.files])};
 el('export').onclick=async()=>{if(recording||loading||!scenes.length)return;const msg=el('msg');if(!window.MediaRecorder||!board.captureStream){msg.textContent='التصدير غير متاح في المتصفح ده. افتح الأداة على Chrome للكمبيوتر.';return}
  let stream,rec;const lock=b=>{document.querySelector('main .grid').inert=b;document.querySelector('.intro').inert=b;el('export').disabled=b;el('projectMenu').disabled=b;recording=b};

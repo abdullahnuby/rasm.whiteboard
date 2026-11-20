@@ -18,3 +18,13 @@ This is the first engine upgrade, not the final photo-segmentation system. Portr
 - Autosave stores Blobs in IndexedDB (async PNG encoding); `.rasm` files still embed data URLs; requested persistent storage.
 - Export records with a timeslice and flushes the last frame before stopping.
 - Transitive path ordering; worker no longer loads `motion.js`; import limits; extra security headers (CSP in report-only mode).
+
+
+## 4.1.0 — Storage and batch reliability
+- Serialize IndexedDB writes and skip stale snapshots so an older asynchronous save cannot overwrite a newer edit.
+- Add a project pixel budget in addition to per-file and project-scene limits.
+- Process image batches sequentially with progress reporting and cancellation between images.
+- Preserve completed scenes when a batch is cancelled.
+- Add a recovery browser for recovered IndexedDB snapshots, with open, download, and delete actions.
+- Validate imported .rasm scene count, image dimensions, and total working-pixel budget before replacing the active project.
+- Add focused tests for serial write queues and image memory-budget calculations.
