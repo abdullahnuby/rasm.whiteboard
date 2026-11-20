@@ -195,9 +195,15 @@
           const p8 = mask[p - 1], p9 = mask[p - width - 1];
           const neighbors = p2 + p3 + p4 + p5 + p6 + p7 + p8 + p9;
           if (neighbors < 2 || neighbors > 6) continue;
-          const ring = [p2, p3, p4, p5, p6, p7, p8, p9, p2];
           let transitions = 0;
-          for (let i = 0; i < 8; i++) if (!ring[i] && ring[i + 1]) transitions++;
+          if (!p2 && p3) transitions++;
+          if (!p3 && p4) transitions++;
+          if (!p4 && p5) transitions++;
+          if (!p5 && p6) transitions++;
+          if (!p6 && p7) transitions++;
+          if (!p7 && p8) transitions++;
+          if (!p8 && p9) transitions++;
+          if (!p9 && p2) transitions++;
           if (transitions !== 1) continue;
           const removeCondition = phase === 0
             ? p2 * p4 * p6 === 0 && p4 * p6 * p8 === 0
