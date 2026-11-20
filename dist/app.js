@@ -81,6 +81,7 @@ function render(t){
    if(target<=line.start)break;
    const from=Math.max(0,cursor-line.start),to=Math.min(line.points.length,target-line.start);
    if(to>from)pathRange(cache.c,line.points,from,to,mode==='color'?line.color:'#29362e',s.weight);
+   cache.paintedThrough=line.start+to;cursor=cache.paintedThrough;
    if(to>=line.points.length){cache.idx++;cursor=end;cache.paintedThrough=cursor}
    else break;
   }
