@@ -1,0 +1,9 @@
+{
+  "name": "rasm-whiteboard-studio",
+  "version": "3.4.0",
+  "private": true,
+  "scripts": {
+    "build": "node --check dist/app.js && node --check dist/project.js && node --check dist/motion.js && node --check dist/zones.js && node scripts/check.mjs && node scripts/motion-test.mjs",
+    "dev": "node scripts/serve.mjs"
+  }
+}
