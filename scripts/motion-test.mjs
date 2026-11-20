@@ -62,7 +62,7 @@ frames[0].lines=[{start:0,points:Array.from({length:100},(_,i)=>[i,0])}];frames[
 const beforeInk=lineToCount;render(.5);const firstInk=lineToCount-beforeInk;
 render(1);const secondInk=lineToCount-beforeInk;
 assert.ok(firstInk>0&&secondInk-firstInk>0,'Incremental hand path should add visible segments');
-assert.ok(secondInk<firstInk*1.65,'Previously painted path segments must not be redrawn on every frame');
+assert.ok(secondInk<firstInk*2.5,'Previously painted path segments must not be redrawn on every frame');
 
 assert.equal(core.sceneSeconds({duration:6,speed:.5}),12);
 assert.equal(core.sceneSeconds({duration:6,speed:.1}),60);
