@@ -28,3 +28,13 @@ This is the first engine upgrade, not the final photo-segmentation system. Portr
 - Add a recovery browser for recovered IndexedDB snapshots, with open, download, and delete actions.
 - Validate imported .rasm scene count, image dimensions, and total working-pixel budget before replacing the active project.
 - Add focused tests for serial write queues and image memory-budget calculations.
+
+
+## 4.2.0 — Timeline editing and visible production
+- Add a proportional multi-scene timeline with a time ruler, playhead scrubbing, scene selection, zoom and fit controls.
+- Drag each scene's right edge to set its final duration directly in seconds; the duration input now uses the same final-time value.
+- Keep existing .rasm project fields and legacy duration/speed calculation compatible.
+- Show the voice-over track as a waveform lane alongside video scenes.
+- Add export progress, elapsed/total time, safe cancellation, and completion/error states.
+- Add visible progress for project restore, backup serialization, and audio decoding.
+- Add focused tests for time conversion and timeline layout.

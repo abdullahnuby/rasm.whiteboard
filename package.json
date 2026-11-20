@@ -1,9 +1,9 @@
 {
   "name": "rasm-whiteboard-studio",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "private": true,
   "scripts": {
-    "build": "node --check dist/engine.js && node --check dist/engine-worker.js && node --check dist/app.js && node --check dist/project.js && node --check dist/motion.js && node --check dist/zones.js && node scripts/check.mjs && node scripts/motion-test.mjs && node scripts/engine-test.mjs && node scripts/schedule-test.mjs && node --check dist/reliability.js && node scripts/reliability-test.mjs",
+    "build": "node --check dist/engine.js && node --check dist/engine-worker.js && node --check dist/app.js && node --check dist/project.js && node --check dist/motion.js && node --check dist/zones.js && node scripts/check.mjs && node scripts/motion-test.mjs && node scripts/engine-test.mjs && node scripts/schedule-test.mjs && node --check dist/reliability.js && node scripts/reliability-test.mjs && node --check dist/timeline.js && node scripts/timeline-test.mjs",
     "dev": "node scripts/serve.mjs"
   }
 }

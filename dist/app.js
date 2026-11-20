@@ -2,8 +2,16 @@
 const el=id=>document.getElementById(id), board=el('board'), ctx=board.getContext('2d'), range=el('seek'), files=el('files');
 const surface=(w,h)=>Object.assign(document.createElement('canvas'),{width:w,height:h});
 let scenes=[], selected=0, time=0, running=false, recording=false, start=0, frame=0, tone=0, demo=true, loading=false, lastUrl='', activeImport=null;
+let timelineScale=40, audioTimeline=null, timelineDrag=null, exportSession=null;
 const defaults={speed:.5,mode:'original',tone:4,sourceHand:'auto',handSize:100,weight:1.4,side:'1',hold:18,paper:'#ffffff',transition:'cut'};
-const colors=['#e6af89','#986642',null], total=()=>scenes.reduce((a,s)=>a+sceneSeconds(s),0), offset=i=>scenes.slice(0,i).reduce((a,s)=>a+sceneSeconds(s),0);
+const colors=['#e6af89','#986642',null], total=()=>RasmTimeline.totalSeconds(scenes), offset=i=>RasmTimeline.layout(scenes,1)[i]?.start||0;
+function setOperationStatus(label,done=0,total=1){
+ const panel=el('operationStatus');if(!panel)return;
+ panel.hidden=false;el('operationText').textContent=label;
+ const max=Math.max(1,total),value=Math.max(0,Math.min(max,done));
+ el('operationProgress').value=value/max*100;el('operationPercent').textContent=Math.round(value/max*100)+'%';
+}
+function clearOperationStatus(){const panel=el('operationStatus');if(panel)panel.hidden=true}
 function path(c,points,ink,width=1.4){c.beginPath();c.moveTo(...points[0]);for(let i=1;i<points.length;i++)c.lineTo(...points[i]);c.strokeStyle=ink;c.lineWidth=width;c.lineJoin=c.lineCap='round';c.stroke()}
 function house(phase){
  const img=surface(640,360),c=img.getContext('2d');c.fillStyle='#fff';c.fillRect(0,0,640,360);
@@ -64,18 +72,93 @@ function render(t){
  if(mode==='fill' && frac===1){ctx.globalAlpha=Math.min(1,s.hold===0?1:(local-drawTime)/Math.min(.6,duration*s.hold/100));ctx.drawImage(s.src,0,0);ctx.globalAlpha=1}
  ctx.restore();if(tip&&overlayEnabled(s))drawHand(ctx,ox+tip[0]*sc,oy+tip[1]*sc,Math.min(W,H)/425*s.handSize/100,s.tone,s.side);
  if(s.transition==='fade'){ctx.globalAlpha=Math.max(0,1-(duration-local)/Math.min(.45,duration*.22));ctx.fillStyle=s.paper;ctx.fillRect(0,0,W,H);ctx.globalAlpha=1}
- range.value=t;el('clock').textContent=t.toFixed(1)+' / '+total().toFixed(1)+' s';el('meta').textContent=(i+1)+' / '+scenes.length
+ range.value=t;range.max=total();el('clock').textContent=t.toFixed(1)+' / '+total().toFixed(1)+' s';el('meta').textContent=(i+1)+' / '+scenes.length;updateTimelinePlayhead(t)
 }
 function stop(){if(typeof stopSound==='function')stopSound();running=false;cancelAnimationFrame(frame);el('play').textContent='▶'}
-function run(end){stop();if(typeof startSound==='function')startSound(time);running=true;start=performance.now()-time*1000;el('play').textContent='Ⅱ';function tick(now){time=Math.min(total(),Math.max(0,(now-start)/1000));render(time);if(time>=total()){stop();if(end)end()}else frame=requestAnimationFrame(tick)}frame=requestAnimationFrame(tick)}
-function pick(i){stop();selected=i;time=offset(i)+sceneSeconds(scenes[i])*.75;refresh()}
-function refresh(){const current=scenes[selected]||defaults;el('speed').value=current.speed||1;el('sceneTime').textContent=scenes.length?'مدة المشهد بعد ضبط السرعة: '+sceneSeconds(current).toFixed(1)+' ث':'';el('sourceHand').value=current.sourceHand;el('handSize').value=current.handSize;el('sizeValue').value=current.handSize+'%';el('weight').value=current.weight;el('zoneEdit').disabled=!scenes.length;el('handState').textContent=current.sourceHand==='present'?'إيد الصورة الأصلية فقط':current.handHint&&current.sourceHand==='auto'?'لو الصورة فيها إيد فعلًا، اختار «الصورة فيها إيد بالفعل».':current.handHint&&current.sourceHand==='detect'?'تم إخفاء الإيد بناءً على الفحص.':'';el('style').value=current.mode;el('side').value=current.side;el('paper').value=current.paper;el('hold').value=current.hold;el('holdValue').value=current.hold+'%';el('transition').value=current.transition;el('sceneName').value=current.name||'';document.querySelectorAll('#hands button').forEach((b,i)=>b.classList.toggle('active',Number(b.dataset.tone)===current.tone));range.max=total();el('duration').value=scenes[selected]?.duration||6;el('count').textContent=scenes.length+' مشاهد';el('cards').replaceChildren();scenes.forEach((s,i)=>{const b=document.createElement('button');b.className='card'+(i===selected?' active':'');const img=new Image();img.src=s.thumb;const caption=document.createElement('span');caption.textContent=(i+1)+' · '+s.name;b.append(img,caption);b.onclick=()=>pick(i);el('cards').append(b)});
+function run(end){stop();if(typeof startSound==='function')startSound(time);running=true;start=performance.now()-time*1000;el('play').textContent='Ⅱ';function tick(now){time=Math.min(total(),Math.max(0,(now-start)/1000));render(time);if(exportSession&&!exportSession.cancelled){const pct=Math.min(100,total()?time/total()*100:100);el('exportProgress').value=pct;el('exportPercent').textContent=Math.floor(pct)+'%';el('exportElapsed').textContent=time.toFixed(1)+' / '+total().toFixed(1)+' ثانية'}if(time>=total()){stop();if(end)end()}else frame=requestAnimationFrame(tick)}frame=requestAnimationFrame(tick)}
+
+function updateTimelinePlayhead(t){
+ const playhead=el('timelinePlayhead');if(playhead)playhead.style.left=(Math.max(0,t)*timelineScale)+'px';
+ const totalLabel=el('timelineTotal');if(totalLabel)totalLabel.textContent=RasmTimeline.formatTime(total());
+}
+function setAudioTimeline(duration,name,buffer){
+ audioTimeline=duration>0?{duration,name:String(name||'التعليق الصوتي'),buffer}:null;renderTimeline();
+}
+function buildWaveform(buffer){
+ const wave=document.createElement('div');wave.className='waveform';if(!buffer)return wave;
+ const data=buffer.getChannelData(0),count=96,step=Math.max(1,Math.floor(data.length/count)),stride=Math.max(1,Math.floor(step/120));
+ for(let i=0;i<count;i++){let peak=0;for(let j=i*step;j<Math.min(data.length,(i+1)*step);j+=stride)peak=Math.max(peak,Math.abs(data[j]));const bar=document.createElement('i');bar.style.height=(Math.max(12,peak*82))+'%';wave.append(bar)}
+ return wave;
+}
+function syncTimelineGeometry(){
+ const content=el('timelineContent'),scroll=el('timelineScroll');if(!content||!scroll)return;
+ const layout=RasmTimeline.layout(scenes,timelineScale),audioDuration=audioTimeline?.duration||0,end=Math.max(total(),audioDuration);
+ const width=Math.max(scroll.clientWidth||640,end*timelineScale+70,640);
+ content.style.width=width+'px';el('timelineRuler').style.width=width+'px';el('timelineVideoTrack').style.width=width+'px';el('timelineAudioTrack').style.width=width+'px';
+ layout.forEach(item=>{const clip=el('timelineVideoTrack').querySelector('[data-index="'+item.index+'"]');if(!clip)return;clip.style.left=(item.start*timelineScale)+'px';clip.style.width=(item.duration*timelineScale)+'px';const duration=clip.querySelector('.timelineClipDuration');if(duration)duration.textContent=item.duration.toFixed(1)+' ث'});
+ time=Math.min(time,total());range.max=total();updateTimelinePlayhead(time);
+}
+function renderTimeline(){
+ const scroll=el('timelineScroll'),content=el('timelineContent');if(!scroll||!content)return;
+ const ruler=el('timelineRuler'),video=el('timelineVideoTrack'),audio=el('timelineAudioTrack');
+ const layout=RasmTimeline.layout(scenes,timelineScale),audioDuration=audioTimeline?.duration||0,end=Math.max(total(),audioDuration);
+ const width=Math.max(scroll.clientWidth||640,end*timelineScale+70,640);
+ content.style.width=width+'px';ruler.style.width=width+'px';video.style.width=width+'px';audio.style.width=width+'px';
+ ruler.replaceChildren();video.replaceChildren();audio.replaceChildren();
+ const tickStep=Math.max(5,Math.ceil((end/100)/5)*5);
+ for(let t=0;t<=Math.ceil(end/tickStep)*tickStep;t+=tickStep){const tick=document.createElement('span');tick.className='timelineTick';tick.style.left=(t*timelineScale)+'px';tick.textContent=RasmTimeline.formatTime(t);ruler.append(tick)}
+ for(const item of layout){
+  const scene=scenes[item.index],clip=document.createElement('div');clip.className='timelineClip'+(item.index===selected?' active':'');clip.dataset.index=item.index;
+  clip.style.left=(item.start*timelineScale)+'px';clip.style.width=(item.duration*timelineScale)+'px';
+  const thumb=document.createElement('img');thumb.className='timelineClipThumb';thumb.src=scene.thumb;thumb.alt='';
+  const copy=document.createElement('div');copy.className='timelineClipCopy';
+  const name=document.createElement('strong');name.textContent=(item.index+1)+'. '+(scene.name||'مشهد '+(item.index+1));
+  const duration=document.createElement('small');duration.className='timelineClipDuration';duration.textContent=item.duration.toFixed(1)+' ث';copy.append(name,duration);
+  const grip=document.createElement('span');grip.className='timelineResize';grip.setAttribute('role','separator');grip.setAttribute('aria-label','اسحب لتعديل مدة المشهد');grip.title='اسحب لتغيير مدة المشهد';
+  grip.addEventListener('pointerdown',event=>beginTimelineResize(item.index,event));grip.addEventListener('click',event=>{event.preventDefault();event.stopPropagation()});
+  clip.append(thumb,copy,grip);clip.addEventListener('click',()=>pick(item.index));video.append(clip);
+ }
+ if(audioTimeline){
+  audio.hidden=false;const audioClip=document.createElement('div');audioClip.className='timelineAudioClip';audioClip.style.width=(audioTimeline.duration*timelineScale)+'px';
+  const label=document.createElement('strong');label.textContent='♫ '+audioTimeline.name;
+  const duration=document.createElement('small');duration.textContent=RasmTimeline.formatTime(audioTimeline.duration);
+  audioClip.append(label,buildWaveform(audioTimeline.buffer),duration);audio.append(audioClip);
+ }else audio.hidden=true;
+ updateTimelinePlayhead(time);
+}
+function beginTimelineResize(index,event){
+ if(recording||loading||!scenes[index])return;event.preventDefault();event.stopPropagation();stop();
+ try{event.currentTarget.setPointerCapture(event.pointerId)}catch{}
+ timelineDrag={index,startX:event.clientX,startDuration:sceneSeconds(scenes[index])};document.body.classList.add('timeline-resizing');
+}
+document.addEventListener('pointermove',event=>{
+ if(!timelineDrag)return;
+ const scene=scenes[timelineDrag.index],next=RasmTimeline.clampSeconds(timelineDrag.startDuration+(event.clientX-timelineDrag.startX)/timelineScale);
+ scene.duration=RasmTimeline.durationForSeconds(next,scene.speed);
+ if(selected===timelineDrag.index)el('duration').value=sceneSeconds(scene).toFixed(1);
+ syncTimelineGeometry();render(time);
+});
+function finishTimelineResize(){
+ if(!timelineDrag)return;timelineDrag=null;document.body.classList.remove('timeline-resizing');renderTimeline();queueSave();render(time);
+}
+document.addEventListener('pointerup',finishTimelineResize);document.addEventListener('pointercancel',finishTimelineResize);
+el('timelineContent').addEventListener('click',event=>{
+ if(event.target.closest('.timelineClip,.timelineResize'))return;
+ const content=el('timelineContent'),x=event.clientX-content.getBoundingClientRect().left;
+ stop();time=Math.min(total(),Math.max(0,x/timelineScale));render(time);
+});
+el('zoomIn').onclick=()=>{timelineScale=Math.min(80,timelineScale+6);renderTimeline()};
+el('zoomOut').onclick=()=>{timelineScale=Math.max(.5,timelineScale-6);renderTimeline()};
+el('zoomFit').onclick=()=>{const seconds=Math.max(total(),audioTimeline?.duration||0);timelineScale=Math.max(.5,Math.min(80,(el('timelineScroll').clientWidth-50)/Math.max(1,seconds)));renderTimeline()};
+
+function pick(i){stop();selected=i;time=offset(i)+sceneSeconds(scenes[i])*.75;refresh();const clip=el('timelineVideoTrack').querySelector('[data-index="'+i+'"]');clip?.scrollIntoView({block:'nearest',inline:'nearest'})}
+function refresh(){const current=scenes[selected]||defaults;el('speed').value=current.speed||1;el('sceneTime').textContent=scenes.length?'مدة المشهد بعد ضبط السرعة: '+sceneSeconds(current).toFixed(1)+' ث':'';el('sourceHand').value=current.sourceHand;el('handSize').value=current.handSize;el('sizeValue').value=current.handSize+'%';el('weight').value=current.weight;el('zoneEdit').disabled=!scenes.length;el('handState').textContent=current.sourceHand==='present'?'إيد الصورة الأصلية فقط':current.handHint&&current.sourceHand==='auto'?'لو الصورة فيها إيد فعلًا، اختار «الصورة فيها إيد بالفعل».':current.handHint&&current.sourceHand==='detect'?'تم إخفاء الإيد بناءً على الفحص.':'';el('style').value=current.mode;el('side').value=current.side;el('paper').value=current.paper;el('hold').value=current.hold;el('holdValue').value=current.hold+'%';el('transition').value=current.transition;el('sceneName').value=current.name||'';document.querySelectorAll('#hands button').forEach((b,i)=>b.classList.toggle('active',Number(b.dataset.tone)===current.tone));range.max=total();el('duration').value=scenes.length?sceneSeconds(scenes[selected]).toFixed(1):'6';el('count').textContent=scenes.length+' مشاهد';el('cards').replaceChildren();scenes.forEach((s,i)=>{const b=document.createElement('button');b.className='card'+(i===selected?' active':'');const img=new Image();img.src=s.thumb;const caption=document.createElement('span');caption.textContent=(i+1)+' · '+s.name;b.append(img,caption);b.onclick=()=>pick(i);el('cards').append(b)});
  el('earlier').disabled=selected<=0;el('later').disabled=selected>=scenes.length-1;for(const id of ['export','play','remove','duration','seek'])el(id).disabled=!scenes.length;
- if(!scenes.length){el('clock').textContent='0 s';el('meta').textContent='';range.value=0}render(time)}
+ if(!scenes.length){el('clock').textContent='0 s';el('meta').textContent='';range.value=0}renderTimeline();render(time)}
 function size(){const r=+el('ratio').value,long=+el('quality').value;board.width=r>=1?long:Math.round(long*r/2)*2;board.height=r>=1?Math.round(long/r/2)*2:long;render(time)}
 function move(d){let j=selected+d;[scenes[selected],scenes[j]]=[scenes[j],scenes[selected]];pick(j)}
 el('earlier').onclick=()=>move(-1);el('later').onclick=()=>move(1);el('remove').onclick=()=>{stop();removedScenes.push({at:selected,scene:scenes[selected]});el('undoRemove').disabled=false;scenes.splice(selected,1);if(scenes.length)pick(Math.min(selected,scenes.length-1));else{time=selected=0;refresh()}};
-el('duration').onchange=e=>{scenes[selected].duration=Math.max(1,Math.min(120,Number(e.target.value)||6));pick(selected)};
+el('duration').onchange=e=>{if(!scenes[selected])return;scenes[selected].duration=RasmTimeline.durationForSeconds(e.target.value,scenes[selected].speed);pick(selected);queueSave()};
 el('ratio').onchange=el('quality').onchange=size;const fields={sourceHand:'sourceHand',handSize:'handSize',weight:'weight',style:'mode',side:'side',paper:'paper',transition:'transition',sceneName:'name',hold:'hold'};
 for(const [id,key] of Object.entries(fields))el(id).onchange=()=>{if(!scenes[selected])return;scenes[selected][key]=['hold','weight','handSize'].includes(id)?Number(el(id).value):el(id).value;refresh()};
 el('addFiles').onclick=()=>files.click();range.oninput=()=>{stop();time=+range.value;render(time)};
@@ -145,13 +228,47 @@ async function importFiles(items){
  }
 }
 files.onchange=async()=>{const items=[...files.files];files.value='';await importMedia(items)};document.ondragover=e=>e.preventDefault();document.ondrop=e=>{e.preventDefault();importMedia([...e.dataTransfer.files])};
-el('export').onclick=async()=>{if(recording||loading||!scenes.length)return;const msg=el('msg');if(!window.MediaRecorder||!board.captureStream){msg.textContent='التصدير غير متاح في المتصفح ده. افتح الأداة على Chrome للكمبيوتر.';return}
- let stream,rec;const lock=b=>{document.querySelector('main .grid').inert=b;document.querySelector('.intro').inert=b;el('export').disabled=b;el('projectMenu').disabled=b;recording=b};
- try{lock(true);stop();time=0;size();if(scenes.some(s=>s.tone===4&&overlayEnabled(s)))await photoHand.decode();await readySound();stream=board.captureStream(30);if(soundBuffer){recordBus=audioContext.createMediaStreamDestination();stream.addTrack(recordBus.stream.getAudioTracks()[0])}const type=['video/mp4','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(t=>MediaRecorder.isTypeSupported(t));rec=new MediaRecorder(stream,type?{mimeType:type,videoBitsPerSecond:6500000}:undefined);
- const chunks=[];let failed=false;rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};rec.onerror=()=>{failed=true;stop();lock(false);stream.getTracks().forEach(t=>t.stop());msg.textContent='تعذّر تسجيل الفيديو.'};
- rec.onstop=()=>{recordBus=null;stream.getTracks().forEach(t=>t.stop());lock(false);if(failed||!chunks.length)return;const a=el('download');if(lastUrl)URL.revokeObjectURL(lastUrl);lastUrl=URL.createObjectURL(new Blob(chunks,{type:rec.mimeType}));a.href=lastUrl;a.download='rasm-whiteboard.'+(rec.mimeType.includes('mp4')?'mp4':'webm');a.hidden=false;a.click();msg.textContent='الفيديو جاهز للتنزيل.'};
- lock(true);msg.textContent='جاري تصدير الفيديو. سيب التبويب مفتوح لحد نهاية التشغيل.';rec.start(1000);run(()=>{stream.getVideoTracks()[0]?.requestFrame?.();setTimeout(()=>{if(rec.state!=='inactive')rec.stop()},500)})}catch{recordBus=null;stream?.getTracks().forEach(t=>t.stop());lock(false);msg.textContent='تعذّر بدء التصدير في المتصفح ده.'}};
-scenes=['التكوين الأساسي','الكتلة المعمارية','التفاصيل النهائية'].map((n,i)=>RasmImageEngine.analyze(house(i),n));selected=1;time=offset(1)+sceneSeconds(scenes[1])*.68;size();refresh();
+el('exportCancel').onclick=()=>{
+ if(!exportSession)return;exportSession.cancelled=true;stop();
+ if(exportSession.rec&&exportSession.rec.state!=='inactive')exportSession.rec.stop();
+ el('exportLabel').textContent='جاري إيقاف التصدير بأمان…';el('exportCancel').disabled=true;
+};
+el('exportClose').onclick=()=>{if(!exportSession)el('exportPanel').hidden=true};
+el('export').onclick=async()=>{
+ if(recording||loading||!scenes.length)return;const msg=el('msg');
+ if(!window.MediaRecorder||!board.captureStream){msg.textContent='التصدير غير متاح في المتصفح ده. افتح الأداة على Chrome للكمبيوتر.';return}
+ let stream,rec;const session={cancelled:false,failed:false,rec:null};exportSession=session;
+ const lock=flag=>{document.querySelector('main .grid').inert=flag;document.querySelector('.intro').inert=flag;el('export').disabled=flag;el('projectMenu').disabled=flag;recording=flag};
+ try{
+  lock(true);stop();time=0;size();el('exportPanel').hidden=false;el('exportCancel').hidden=false;el('exportCancel').disabled=false;el('exportClose').hidden=true;
+  el('exportLabel').textContent='تجهيز محرك التصدير…';el('exportProgress').value=0;el('exportPercent').textContent='0%';el('exportElapsed').textContent='0.0 / '+total().toFixed(1)+' ثانية';
+  if(scenes.some(s=>s.tone===4&&overlayEnabled(s)))await photoHand.decode();
+  await readySound();
+  if(session.cancelled){lock(false);exportSession=null;el('exportCancel').hidden=true;el('exportClose').hidden=false;el('exportLabel').textContent='تم إلغاء التصدير';return}
+  stream=board.captureStream(30);
+  if(soundBuffer){recordBus=audioContext.createMediaStreamDestination();stream.addTrack(recordBus.stream.getAudioTracks()[0])}
+  const type=['video/mp4','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(t=>MediaRecorder.isTypeSupported(t));
+  rec=new MediaRecorder(stream,type?{mimeType:type,videoBitsPerSecond:6500000}:undefined);session.rec=rec;
+  const chunks=[];rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+  rec.onerror=()=>{session.failed=true;el('exportLabel').textContent='حدث خطأ أثناء تسجيل الفيديو';msg.textContent='تعذّر تسجيل الفيديو.';stop();if(rec.state!=='inactive')rec.stop()};
+  rec.onstop=()=>{
+   recordBus=null;stream.getTracks().forEach(t=>t.stop());lock(false);
+   const cancelled=session.cancelled,failed=session.failed;exportSession=null;
+   el('exportCancel').hidden=true;el('exportCancel').disabled=false;el('exportClose').hidden=false;
+   if(cancelled){el('exportLabel').textContent='تم إلغاء التصدير';el('exportPercent').textContent='—';el('exportElapsed').textContent='لم يتم إنشاء ملف';msg.textContent='تم إلغاء عملية التصدير.';return}
+   if(failed||!chunks.length){el('exportLabel').textContent='لم يكتمل التصدير';msg.textContent='لم يتم إنشاء ملف فيديو. جرّب متصفح Chrome محدّثًا.';return}
+   const a=el('download');if(lastUrl)URL.revokeObjectURL(lastUrl);
+   lastUrl=URL.createObjectURL(new Blob(chunks,{type:rec.mimeType}));
+   a.href=lastUrl;a.download='rasm-whiteboard.'+(rec.mimeType.includes('mp4')?'mp4':'webm');a.hidden=false;a.click();
+   el('exportProgress').value=100;el('exportPercent').textContent='100%';el('exportLabel').textContent='اكتمل التصدير · الفيديو جاهز';el('exportElapsed').textContent=total().toFixed(1)+' ثانية';msg.textContent='الفيديو جاهز للتنزيل.';
+  };
+  el('exportLabel').textContent='جاري إنشاء الفيديو من المشاهد…';rec.start(1000);
+  run(()=>{stream.getVideoTracks()[0]?.requestFrame?.();setTimeout(()=>{if(rec.state!=='inactive')rec.stop()},500)});
+ }catch{
+  recordBus=null;stream?.getTracks().forEach(t=>t.stop());lock(false);exportSession=null;
+  el('exportCancel').hidden=true;el('exportClose').hidden=false;el('exportLabel').textContent='تعذّر بدء التصدير';msg.textContent='تعذّر بدء التصدير في المتصفح ده.';
+ }
+};scenes=['التكوين الأساسي','الكتلة المعمارية','التفاصيل النهائية'].map((n,i)=>RasmImageEngine.analyze(house(i),n));selected=1;time=offset(1)+sceneSeconds(scenes[1])*.68;size();refresh();
 
 el('allOriginal').onclick=()=>{if(!scenes.length)return;stop();for(const s of scenes)s.mode='original';cache={};pick(selected);queueSave();el('msg').textContent='تم تطبيق ألوان الصور الأصلية على كل المشاهد.'};
 
