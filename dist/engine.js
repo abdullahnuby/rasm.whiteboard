@@ -401,7 +401,7 @@
     const defaults = { speed: 0.5, mode: 'original', tone: 4, sourceHand: 'auto', handSize: 100,
       weight: 1.4, side: '1', hold: 18, paper: '#ffffff', transition: 'cut' };
     return { name, src: source.src, baseLines: result.lines, centerBaseLines: result.centerLines || [], centerMetrics: result.centerMetrics || null, motionStyle: 'smart', zones: [], handHint: !!handHint,
-      thumb: source.src.toDataURL('image/jpeg', 0.65), lines: result.lines, length: result.length,
+      thumb: source.src.toDataURL('image/jpeg', 0.65), lines: result.centerLines && result.centerLines.length ? result.centerLines : result.lines, length: result.centerLines && result.centerLines.length ? result.centerLength : result.length,
       duration: 6, engineVersion: 4, metrics: result.metrics, ...defaults };
   }
 
