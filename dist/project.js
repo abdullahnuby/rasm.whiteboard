@@ -8,6 +8,7 @@ for(const [id,key] of [['tipX','x'],['tipY','y']])el(id).onchange=()=>{handTip[k
 const projectDialog=el('projectDialog');
 let soundBuffer=null,audioContext=null,audioSource=null,recordBus=null,soundAsset=null;
 let restoring=true,timer,db,saveRevision=0,title='مشروع الوايت بورد';
+const saveQueue=RasmReliability.createSerialQueue();
 const within=(v,min,max,fallback)=>Number.isFinite(v)?Math.min(max,Math.max(min,v)):fallback;
 const choose=(v,list,fallback)=>list.includes(v)?v:fallback;
 const asData=file=>new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=()=>no(r.error);r.readAsDataURL(file)});
@@ -44,7 +45,7 @@ el('copy').onclick=()=>{if(!scenes.length)return;let clone={...scenes[selected],
 function busy(flag){loading=flag;document.querySelector('.grid').inert=flag;document.querySelector('.intro').inert=flag;el('export').disabled=flag||!scenes.length;el('projectMenu').disabled=flag}
 function setTitle(value){title=String(value||'مشروع الوايت بورد').trim().slice(0,100)||'مشروع الوايت بورد';el('titleView').textContent=el('projectName').value=title}
 el('projectName').onchange=e=>{setTitle(e.target.value);queueSave()};
-el('projectMenu').onclick=()=>{if(recording||loading)return;stop();projectDialog.showModal()};
+el('projectMenu').onclick=()=>{if(recording||loading)return;stop();projectDialog.showModal();listRecovered()};
 const canvasBlob=c=>new Promise((ok,no)=>c.toBlob(b=>b?ok(b):no(Error('blob')),'image/png'));
 const asUrl=x=>typeof x==='string'?Promise.resolve(x):asData(x);
 // Settings are copied synchronously so edits made while images encode cannot tear the snapshot.
@@ -59,27 +60,169 @@ async function snapshot(forFile){
 }
 function dbRequest(req){return new Promise((ok,no)=>{req.onsuccess=()=>ok(req.result);req.onerror=()=>no(req.error)})}
 let askedPersist=false;
-async function save(revision){if(restoring||!db)return;try{const data=await snapshot(false),tx=db.transaction('projects','readwrite');tx.objectStore('projects').put(data,'current');await new Promise((ok,no)=>{tx.oncomplete=ok;tx.onabort=tx.onerror=no});if(revision===saveRevision)el('saveState').textContent='محفوظ على الجهاز';if(!askedPersist){askedPersist=true;navigator.storage?.persist?.().catch(()=>{})}}catch{el('saveState').textContent='تعذّر الحفظ المحلي · نزّل نسخة من ملف المشروع'}}
+async function save(revision){
+ return saveQueue(async()=>{
+  if(restoring||!db||revision!==saveRevision)return;
+  try{
+   const data=await snapshot(false);
+   if(restoring||!db||revision!==saveRevision)return;
+   const tx=db.transaction('projects','readwrite');
+   tx.objectStore('projects').put(data,'current');
+   await new Promise((ok,no)=>{tx.oncomplete=ok;tx.onabort=tx.onerror=()=>no(tx.error||Error('IndexedDB write failed'))});
+   if(revision===saveRevision)el('saveState').textContent='محفوظ على الجهاز';
+   if(!askedPersist){askedPersist=true;navigator.storage?.persist?.().catch(()=>{})}
+  }catch{
+   if(revision===saveRevision)el('saveState').textContent='تعذّر الحفظ المحلي · نزّل نسخة من ملف المشروع';
+  }
+ });
+}
 function queueSave(){if(restoring)return;el('saveState').textContent='جاري حفظ التعديلات…';clearTimeout(timer);const revision=++saveRevision;timer=setTimeout(()=>save(revision),220)}
 if(!window.indexedDB)el('saveState').textContent='الحفظ المحلي غير متاح';
 const persistedInputs=new Set(['sourceHand','handSize','weight','ratio','quality','side','hold','paper','transition','duration','sceneName','style']);
 document.addEventListener('change',e=>{if(persistedInputs.has(e.target.id))queueSave()});
 document.addEventListener('click',e=>{if(e.target.closest('#hands, #earlier, #later, #remove'))queueSave()});
-el('backup').onclick=async()=>{if(recording||loading)return;busy(true);try{const url=URL.createObjectURL(new Blob([JSON.stringify(await snapshot(true))],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=title+'.rasm';a.click();setTimeout(()=>URL.revokeObjectURL(url),60000)}catch{el('msg').textContent='تعذّر تجهيز نسخة المشروع.'}finally{busy(false)}};
-el('restore').onclick=()=>el('projectInput').click();
-async function readProject(p){
- if(p?.format!=='rasm-studio'||![2,3].includes(p.version)||!Array.isArray(p.scenes))throw Error('format');
- const restored=[];
- for(const row of p.scenes){
- const blobImage=row?.image instanceof Blob&&/^image\/(png|jpeg|webp)$/.test(row.image.type);
- if(!blobImage&&!/^data:image\/(png|jpeg|webp);base64,/i.test(row?.image))throw Error('image');
- const imageUrl=blobImage?URL.createObjectURL(row.image):row.image;let s;
- try{const img=new Image();img.src=imageUrl;await img.decode();s=await RasmImageEngine.analyzeAsync(img,String(row.name||'مشهد').slice(0,120))}finally{if(blobImage)URL.revokeObjectURL(imageUrl)}
- Object.assign(s,{asset:row.image,speed:choose(row.speed,[.25,.5,.75,1],1),sourceHand:choose(row.sourceHand,['auto','detect','present','clean'],'auto'),weight:choose(row.weight,[1,1.4,2.3],1.4),handSize:within(row.handSize,55,160,100),zones:Array.isArray(row.zones)?row.zones.filter(z=>z&&['x','y','w','h'].every(k=>Number.isFinite(z[k])&&z[k]>=0&&z[k]<=1)).slice(0,80):[],duration:within(row.duration,1,120,6),hold:within(row.hold,0,70,18),side:choose(row.side,['1','-1'],'1'),tone:choose(row.tone,p.hand?[0,1,2,3,4]:[0,1,2,4],4),mode:choose(row.mode,['original','ink','color','fill'],'original'),paper:/^#[a-f0-9]{6}$/i.test(row.paper)?row.paper:'#ffffff',transition:choose(row.transition,['cut','fade'],'cut')});applyZones(s);restored.push(s)}
- let audio=null;
- if(p.audio){if(p.audio.blob instanceof Blob)audio=await audioEngine().decodeAudioData(await p.audio.blob.arrayBuffer());else{if(typeof p.audio.data!=='string'||!/^data:[^,]*;base64,/i.test(p.audio.data))throw Error('audio');audio=await audioEngine().decodeAudioData(await (await fetch(p.audio.data)).arrayBuffer())}}
- let custom=null;if(p.hand){if(!/^data:image\/png;base64,/i.test(p.hand))throw Error('hand');custom=new Image();custom.src=p.hand;await custom.decode()}
- stop();clearRemoved();handImage=custom;handData=p.hand||null;handTip={x:within(p.tip?.x,0,100,5),y:within(p.tip?.y,0,100,88)};el('tipX').value=handTip.x;el('tipY').value=handTip.y;el('useHand').disabled=!custom;scenes=restored;demo=p.demo===true;soundBuffer=audio;soundAsset=p.audio?{name:String(p.audio.name||'تسجيل').slice(0,200),...(p.audio.blob instanceof Blob?{blob:p.audio.blob}:{data:p.audio.data})}:null;el('ratio').value=choose(p.ratio,['1.7777778','.5625','1'],'1.7777778');el('quality').value=choose(p.quality,['1280','1920'],'1280');setTitle(p.title);showAudio();selected=Math.floor(within(p.selected,0,Math.max(0,scenes.length-1),0));time=scenes.length?offset(selected)+sceneSeconds(scenes[selected])*.7:0;cache={};size();refresh()
+async function downloadProjectData(data,fileName){
+ const copy={...data,scenes:[]};
+ for(const row of data.scenes||[]){
+  const image=row.image instanceof Blob?await asData(row.image):row.image;
+  copy.scenes.push({...row,image});
+ }
+ if(data.audio){
+  const audioData=data.audio.blob instanceof Blob?await asData(data.audio.blob):data.audio.data;
+  copy.audio={name:String(data.audio.name||'تسجيل').slice(0,200),data:audioData};
+ }
+ const blob=new Blob([JSON.stringify(copy)],{type:'application/json'});
+ const url=URL.createObjectURL(blob),a=document.createElement('a');
+ a.href=url;a.download=(String(fileName||data.title||'مشروع الوايت بورد').replace(/[\\/:*?"<>|]+/g,'-').slice(0,100)||'مشروع')+'.rasm';
+ a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
-el('projectInput').onchange=async e=>{const file=e.target.files[0];if(!file)return;projectDialog.close();busy(true);try{await readProject(JSON.parse(await file.text()));queueSave();el('msg').textContent='تم فتح نسخة المشروع.'}catch{el('msg').textContent='تعذّر قراءة النسخة. المشروع الحالي ما زال مفتوح.'}finally{busy(false);e.target.value=''}};
+el('backup').onclick=async()=>{
+ if(recording||loading)return;
+ busy(true);
+ try{await downloadProjectData(await snapshot(false),title)}
+ catch{el('msg').textContent='تعذّر تجهيز نسخة المشروع.'}
+ finally{busy(false)}
+};
+el('restore').onclick=()=>el('projectInput').click();
+async function recoveredRecords(){
+ if(!db)return [];
+ return new Promise((resolve,reject)=>{
+  const tx=db.transaction('projects','readonly'),request=tx.objectStore('projects').openCursor(),items=[];
+  request.onerror=()=>reject(request.error||Error('Unable to read recovery records'));
+  request.onsuccess=()=>{
+   const cursor=request.result;
+   if(!cursor){resolve(items);return}
+   if(typeof cursor.key==='string'&&cursor.key.startsWith('recovered-'))items.push({key:cursor.key,value:cursor.value});
+   cursor.continue();
+  };
+ });
+}
+async function listRecovered(){
+ const section=el('recoverySection'),container=el('recoveredItems');
+ container.replaceChildren();section.hidden=true;
+ if(!db)return;
+ try{
+  const items=await recoveredRecords();
+  if(!items.length)return;
+  section.hidden=false;
+  for(const item of items){
+   const row=document.createElement('div');row.className='recoveredItem';
+   const name=document.createElement('strong');name.className='recoveredName';
+   name.textContent=(item.value?.title||'مشروع مسترد')+' · '+item.key;
+   const open=document.createElement('button');open.className='recoverOpen';open.textContent='محاولة الفتح';
+   open.onclick=async()=>{
+    busy(true);
+    try{await readProject(item.value);queueSave();projectDialog.close();el('msg').textContent='تم فتح النسخة المستردة.'}
+    catch{el('msg').textContent='لم تنجح استعادة هذه النسخة. ما زالت محفوظة ويمكن تنزيلها.'}
+    finally{busy(false)}
+   };
+   const download=document.createElement('button');download.textContent='تنزيل النسخة';
+   download.onclick=async()=>{
+    busy(true);
+    try{await downloadProjectData(item.value,item.value?.title||item.key);el('msg').textContent='تم تجهيز نسخة الاسترداد للتنزيل.'}
+    catch{el('msg').textContent='تعذّر تجهيز ملف الاسترداد.'}
+    finally{busy(false)}
+   };
+   const remove=document.createElement('button');remove.textContent='حذف النسخة';
+   remove.onclick=async()=>{
+    if(!confirm('حذف نسخة الاسترداد هذه نهائيًا؟'))return;
+    try{
+     const tx=db.transaction('projects','readwrite');tx.objectStore('projects').delete(item.key);
+     await new Promise((ok,no)=>{tx.oncomplete=ok;tx.onabort=tx.onerror=()=>no(tx.error||Error('Delete failed'))});
+     await listRecovered();
+    }catch{el('msg').textContent='تعذّر حذف نسخة الاسترداد.'}
+   };
+   row.append(name,open,download,remove);container.append(row);
+  }
+ }catch{section.hidden=false;const note=document.createElement('p');note.className='recoveryEmpty';note.textContent='تعذّر قراءة قائمة النسخ المستردة.';container.append(note)}
+}
+
+async function readProject(p){
+ if(p?.format!=='rasm-studio'||![2,3].includes(p.version)||!Array.isArray(p.scenes)||p.scenes.length>300)throw Error('format-or-scene-limit');
+ const restored=[];let totalPixels=0;
+ for(const row of p.scenes){
+  const blobImage=row?.image instanceof Blob&&/^image\/(png|jpeg|webp)$/.test(row.image.type);
+  if(!blobImage&&!/^data:image\/(png|jpeg|webp);base64,/i.test(row?.image))throw Error('image');
+  if(blobImage&&row.image.size>MAX_IMAGE_BYTES)throw Error('image-size');
+  if(typeof row.image==='string'&&row.image.length>MAX_IMAGE_BYTES*1.42)throw Error('image-size');
+  const imageUrl=blobImage?URL.createObjectURL(row.image):row.image;let s;
+  try{
+   const img=new Image();img.src=imageUrl;await img.decode();
+   const fitted=RasmReliability.fitDimensions(img.naturalWidth||img.width,img.naturalHeight||img.height,960,720);
+   if(!fitted||!RasmReliability.withinPixelBudget(totalPixels,fitted.pixels,MAX_PROJECT_PIXELS))throw Error('project-pixel-limit');
+   totalPixels+=fitted.pixels;
+   s=await RasmImageEngine.analyzeAsync(img,String(row.name||'مشهد').slice(0,120));
+  }finally{if(blobImage)URL.revokeObjectURL(imageUrl)}
+  Object.assign(s,{
+   asset:row.image,
+   speed:choose(row.speed,[.25,.5,.75,1],1),
+   sourceHand:choose(row.sourceHand,['auto','detect','present','clean'],'auto'),
+   weight:choose(row.weight,[1,1.4,2.3],1.4),
+   handSize:within(row.handSize,55,160,100),
+   zones:Array.isArray(row.zones)?row.zones.filter(z=>z&&['x','y','w','h'].every(k=>Number.isFinite(z[k])&&z[k]>=0&&z[k]<=1)).slice(0,80):[],
+   duration:within(row.duration,1,120,6),
+   hold:within(row.hold,0,70,18),
+   side:choose(row.side,['1','-1'],'1'),
+   tone:choose(row.tone,p.hand?[0,1,2,3,4]:[0,1,2,4],4),
+   mode:choose(row.mode,['original','ink','color','fill'],'original'),
+   paper:/^#[a-f0-9]{6}$/i.test(row.paper)?row.paper:'#ffffff',
+   transition:choose(row.transition,['cut','fade'],'cut')
+  });
+  applyZones(s);restored.push(s);
+ }
+ let audio=null;
+ if(p.audio){
+  if(p.audio.blob instanceof Blob){
+   if(p.audio.blob.size>MAX_AUDIO_BYTES)throw Error('audio-size');
+   audio=await audioEngine().decodeAudioData(await p.audio.blob.arrayBuffer());
+  }else{
+   if(typeof p.audio.data!=='string'||!/^data:[^,]*;base64,/i.test(p.audio.data)||p.audio.data.length>MAX_AUDIO_BYTES*1.42)throw Error('audio');
+   audio=await audioEngine().decodeAudioData(await (await fetch(p.audio.data)).arrayBuffer());
+  }
+ }
+ let custom=null;
+ if(p.hand){
+  if(!/^data:image\/png;base64,/i.test(p.hand))throw Error('hand');
+  custom=new Image();custom.src=p.hand;await custom.decode();
+ }
+ stop();clearRemoved();handImage=custom;handData=p.hand||null;
+ handTip={x:within(p.tip?.x,0,100,5),y:within(p.tip?.y,0,100,88)};
+ el('tipX').value=handTip.x;el('tipY').value=handTip.y;el('useHand').disabled=!custom;
+ scenes=restored;demo=p.demo===true;soundBuffer=audio;
+ soundAsset=p.audio?{name:String(p.audio.name||'تسجيل').slice(0,200),...(p.audio.blob instanceof Blob?{blob:p.audio.blob}:{data:p.audio.data})}:null;
+ el('ratio').value=choose(p.ratio,['1.7777778','.5625','1'],'1.7777778');
+ el('quality').value=choose(p.quality,['1280','1920'],'1280');
+ setTitle(p.title);showAudio();
+ selected=Math.floor(within(p.selected,0,Math.max(0,scenes.length-1),0));
+ time=scenes.length?offset(selected)+sceneSeconds(scenes[selected])*.7:0;
+ cache={};size();refresh();
+}
+el('projectInput').onchange=async e=>{
+ const file=e.target.files[0];if(!file)return;
+ if(file.size>300*1048576){el('msg').textContent='ملف المشروع أكبر من 300 ميجابايت.';e.target.value='';return}
+ projectDialog.close();busy(true);
+ try{await readProject(JSON.parse(await file.text()));queueSave();el('msg').textContent='تم فتح نسخة المشروع.'}
+ catch{el('msg').textContent='تعذّر قراءة النسخة. المشروع الحالي ما زال مفتوح.'}
+ finally{busy(false);e.target.value=''}
+};
 (async()=>{busy(true);setTitle(title);try{const req=indexedDB.open('rasm-studio',1);req.onupgradeneeded=()=>req.result.createObjectStore('projects');db=await dbRequest(req);const last=await dbRequest(db.transaction('projects').objectStore('projects').get('current'));if(last){try{await readProject(last)}catch(error){const keep='recovered-'+Date.now();await dbRequest(db.transaction('projects','readwrite').objectStore('projects').put(last,keep));el('saveState').textContent='تعذّر فتح المشروع المحفوظ. اتحفظت نسخة منه ('+keep+') ولن تُمسح.';return}}el('saveState').textContent=last?'تم استرجاع المشروع المحفوظ':'مشروع تجريبي · أضف صورك للبدء'}catch{db=null;el('saveState').textContent='تعذّر استرجاع الحفظ المحلي · الحفظ التلقائي متوقف حتى لا يُمسح شغلك. استخدم ملف المشروع'}finally{restoring=false;busy(false)}})();
