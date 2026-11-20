@@ -21,21 +21,6 @@ function house(phase){
  face([[-74,44,155],[68,44,155],[68,-46,155],[-74,-46,155]],'#eff4e6')}
  if(phase===2){for(let i=0;i<4;i++){const x=115+i*12,y=-44+i*15;line([x,y,0],[x,y,45]);for(let j=0;j<6;j++)line([x,y,16+j*5],[x-7+j*.5,y+6,28+j*4],'#798668',2)}}
  return img}
-function analyze(img,name){
- const k= Math.min(720/img.width,540/img.height,1), w=Math.max(1,Math.round(img.width*k)),h=Math.max(1,Math.round(img.height*k));
- const src=surface(w,h),c=src.getContext('2d',{willReadFrequently:true});c.fillStyle='white';c.fillRect(0,0,w,h);c.drawImage(img,0,0,w,h);
- const data=c.getImageData(0,0,w,h).data,n=w*h,gray=new Uint8Array(n),mask=new Uint8Array(n),lines=[];
- for(let i=0;i<n;i++)gray[i]=(data[i*4]*3+data[i*4+1]*6+data[i*4+2])/10;
- for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){
- const i=y*w+x,g=Math.abs(gray[i+1]-gray[i-1])+Math.abs(gray[i+w]-gray[i-w]);
- if(g>30 && gray[i]<246)mask[i]=1}
- const dirs=[1,w+1,w,w-1,-1,-w-1,-w,1-w];let length=0;
- for(let y=0;y<h;y++)for(let x=0;x<w;x++){let i=y*w+x;if(!mask[i])continue;
- let points=[],r=0,g=0,b=0;
- while(i>=0){mask[i]=0;points.push([i%w,Math.floor(i/w)]);r+=data[i*4];g+=data[i*4+1];b+=data[i*4+2];let next=-1;for(const d of dirs)if(mask[i+d]){next=i+d;break}i=next}
- if(points.length<2)continue;let l=points.length;lines.push({points,color:'rgb('+[r,g,b].map(v=>Math.round(v/l*.78)).join(',')+')',start:length});length+=l}
- return {name,src,baseLines:lines,zones:[],handHint:edgeSkinRegion(data,w,h),thumb:src.toDataURL('image/jpeg',.65),lines,length,duration:6,...defaults}
-}
 const photoHand=new Image();photoHand.src='assets/marker-hand.webp';photoHand.onload=()=>render(time);
 function drawHand(c,x,y,scale,tone,side){
  if(tone===4){if(!photoHand.naturalWidth)return;const w=scale*190,h=w*photoHand.height/photoHand.width;c.save();c.translate(x,y);c.scale(Number(side),1);c.drawImage(photoHand,-w*.052,-h*.15,w,h);c.restore();return}
@@ -98,7 +83,7 @@ for(const [id,label,icon] of [[4,'فوتوغرافية',''],[0,'مرسومة','�
  const b=document.createElement('button');b.dataset.tone=id;if(id===4){const img=new Image();img.src='assets/marker-hand.webp';img.alt='';b.append(img)}else{const mark=document.createElement('b');mark.textContent=icon;b.append(mark)}b.append(label);b.onclick=()=>{if(!scenes[selected])return;scenes[selected].tone=id;refresh()};el('hands').append(b)
 }
 const digits=s=>s.replace(/[٠-٩]/g,ch=>String(ch.charCodeAt(0)-1632)).replace(/[۰-۹]/g,ch=>String(ch.charCodeAt(0)-1776)),cmp=new Intl.Collator('ar',{numeric:true});
-async function importFiles(items){if(recording||loading)return;loading=true;stop();let added=[],bad=0;try{for(const f of items){el('msg').textContent='جاري تجهيز '+f.name;let url=URL.createObjectURL(f);try{const im=new Image();im.src=url;await im.decode();added.push(analyze(im,f.name))}catch{bad++}finally{URL.revokeObjectURL(url)}}
+async function importFiles(items){if(recording||loading)return;loading=true;stop();let added=[],bad=0;try{for(const f of items){el('msg').textContent='جاري تجهيز '+f.name;let url=URL.createObjectURL(f);try{const im=new Image();im.src=url;await im.decode();added.push(await RasmImageEngine.analyzeAsync(im,f.name))}catch{bad++}finally{URL.revokeObjectURL(url)}}
  if(added.length){if(demo){scenes=[];clearRemoved()}demo=false;added.sort((a,b)=>cmp.compare(digits(a.name),digits(b.name)));const first=scenes.length;scenes.push(...added);pick(first);queueSave()}
  el('msg').textContent=(added.length?'تم تجهيز '+added.length+' مشهد. ':'')+(bad?'تعذّر فتح '+bad+' ملف.':'')
  }finally{loading=false;files.value=''}}
@@ -109,7 +94,7 @@ el('export').onclick=async()=>{if(recording||loading||!scenes.length)return;cons
  const chunks=[];let failed=false;rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};rec.onerror=()=>{failed=true;stop();lock(false);stream.getTracks().forEach(t=>t.stop());msg.textContent='تعذّر تسجيل الفيديو.'};
  rec.onstop=()=>{recordBus=null;stream.getTracks().forEach(t=>t.stop());lock(false);if(failed||!chunks.length)return;const a=el('download');if(lastUrl)URL.revokeObjectURL(lastUrl);lastUrl=URL.createObjectURL(new Blob(chunks,{type:rec.mimeType}));a.href=lastUrl;a.download='rasm-whiteboard.'+(rec.mimeType.includes('mp4')?'mp4':'webm');a.hidden=false;a.click();msg.textContent='الفيديو جاهز للتنزيل.'};
  lock(true);msg.textContent='جاري تصدير الفيديو. سيب التبويب مفتوح لحد نهاية التشغيل.';rec.start();run(()=>rec.stop())}catch{recordBus=null;stream?.getTracks().forEach(t=>t.stop());lock(false);msg.textContent='تعذّر بدء التصدير في المتصفح ده.'}};
-scenes=['التكوين الأساسي','الكتلة المعمارية','التفاصيل النهائية'].map((n,i)=>analyze(house(i),n));selected=1;time=offset(1)+sceneSeconds(scenes[1])*.68;size();refresh();
+scenes=['التكوين الأساسي','الكتلة المعمارية','التفاصيل النهائية'].map((n,i)=>RasmImageEngine.analyze(house(i),n));selected=1;time=offset(1)+sceneSeconds(scenes[1])*.68;size();refresh();
 
 el('allOriginal').onclick=()=>{if(!scenes.length)return;stop();for(const s of scenes)s.mode='original';cache={};pick(selected);queueSave();el('msg').textContent='تم تطبيق ألوان الصور الأصلية على كل المشاهد.'};
 
