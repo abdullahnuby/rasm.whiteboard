@@ -51,7 +51,7 @@ const asUrl=x=>typeof x==='string'?Promise.resolve(x):asData(x);
 // Settings are copied synchronously so edits made while images encode cannot tear the snapshot.
 // Images and audio stay Blobs for IndexedDB (no base64 bloat, no main-thread PNG encoding); the .rasm file gets data URLs.
 async function snapshot(forFile){
- const rows=scenes.map(s=>{const {name,duration,speed,motionStyle,mode,tone,side,hold,paper,transition,sourceHand,handSize,weight}=s;return {scene:s,row:{name,duration,speed,mode,tone,side,hold,paper,transition,sourceHand,handSize,weight,zones:s.zones.map(z=>({...z}))}}});
+ const rows=scenes.map(s=>{const {name,duration,speed,motionStyle,mode,tone,side,hold,paper,transition,sourceHand,handSize,weight}=s;return {scene:s,row:{name,duration,speed,motionStyle,mode,tone,side,hold,paper,transition,sourceHand,handSize,weight,zones:s.zones.map(z=>({...z}))}}});
  const head={format:'rasm-studio',version:3,title,demo,ratio:el('ratio').value,quality:el('quality').value,selected,hand:handData,tip:handTip};
  const sound=soundAsset;
  for(const item of rows){const s=item.scene;if(!s.asset)s.asset=await canvasBlob(s.src);item.row.image=forFile?await asUrl(s.asset):s.asset}
