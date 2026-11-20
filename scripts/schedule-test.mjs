@@ -25,4 +25,10 @@ let used = 0;
 for (let t = 0; t < 256; t++) if (plan.ends[t + 1] > plan.ends[t]) used++;
 assert.ok(used > 100, 'Reveal times should spread across the timeline');
 assert.equal(vm.runInContext('colorSchedule(scene)', context), plan, 'Schedule should be memoized per scene');
+// The first animation frame can be timestamped slightly before `start`, giving a negative fraction.
+for (const f of [-0.5, -1e-6, NaN, 0, 1, 2]) {
+  context.f = f;
+  const step = vm.runInContext('strokeProgress(scene, f)', context, { timeout: 5000 });
+  assert.ok(Number.isFinite(step.target) && step.target >= 0, 'strokeProgress must tolerate fraction ' + f);
+}
 console.log('RASM schedule tests passed.');

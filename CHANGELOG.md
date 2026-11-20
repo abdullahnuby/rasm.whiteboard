@@ -10,3 +10,11 @@
 - Added focused engine tests for blank images, continuous strokes, border handling, and path geometry.
 
 This is the first engine upgrade, not the final photo-segmentation system. Portrait-aware and object-aware drawing modes remain future work.
+
+## 4.0.1 — Stability fixes
+- Fixed an infinite loop in `colorSchedule` (fractional path coordinates from the 4.0 resampler); added an integration test.
+- A failed restore no longer lets autosave overwrite the saved project; an unreadable record is copied to `recovered-*`.
+- Reveal schedule is memoized per scene; first-frame negative time no longer breaks playback/export.
+- Autosave stores Blobs in IndexedDB (async PNG encoding); `.rasm` files still embed data URLs; requested persistent storage.
+- Export records with a timeslice and flushes the last frame before stopping.
+- Transitive path ordering; worker no longer loads `motion.js`; import limits; extra security headers (CSP in report-only mode).

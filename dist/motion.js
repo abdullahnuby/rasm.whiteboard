@@ -82,7 +82,7 @@ function strokeProgress(scene,fraction){
   });
   plan={segments,end};travelPlans.set(scene.lines,plan)
  }
- const distance=fraction*plan.end;
+ const distance=Math.min(1,Math.max(0,Number.isFinite(fraction)?fraction:0))*plan.end;
  let low=0,high=plan.segments.length-1;
  while(low<high){const middle=(low+high)>>1;if(distance>=plan.segments[middle].end)low=middle+1;else high=middle}
  const seg=plan.segments[low];

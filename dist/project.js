@@ -18,13 +18,14 @@ function startSound(at){if(!soundBuffer||at>=soundBuffer.duration)return;const c
 function showAudio(){el('audioInfo').textContent=soundAsset?soundAsset.name+' · '+soundBuffer.duration.toFixed(1)+' ث': 'مفيش تسجيل مضاف';el('audioClear').hidden=!soundAsset;el('audioPick').textContent=soundAsset?'تغيير التسجيل':'إضافة تسجيل'}
 el('audioPick').onclick=()=>el('soundFile').click();
 function isAudioFile(file){return file.type.startsWith('audio/')||/\.(mp3|m4a|aac|wav|ogg|flac|opus|weba)$/i.test(file.name)}
+const MAX_AUDIO_BYTES=80*1048576;
 async function attachRecording(file){
  if(!file||recording||loading)return;
+ if(file.size>MAX_AUDIO_BYTES){el('msg').textContent='ملف الصوت أكبر من 80 ميجابايت. قسّمه أو اضغطه.';return}
  stop();busy(true);el('msg').textContent='جاري تجهيز التسجيل…';
  try{
   const decoded=await audioEngine().decodeAudioData(await file.arrayBuffer());
-  const data=await asData(file);
-  soundBuffer=decoded;soundAsset={name:file.name,data};showAudio();queueSave();
+  soundBuffer=decoded;soundAsset={name:String(file.name).slice(0,200),blob:file};showAudio();queueSave();
   el('msg').textContent='تمت إضافة التسجيل · '+decoded.duration.toFixed(1)+' ثانية';
  }catch{el('msg').textContent='تعذّر فتح التسجيل. جرّب نسخة MP3 أو WAV محفوظة في تطبيق الملفات.'}
  finally{busy(false)}
@@ -44,30 +45,41 @@ function busy(flag){loading=flag;document.querySelector('.grid').inert=flag;docu
 function setTitle(value){title=String(value||'مشروع الوايت بورد').trim().slice(0,100)||'مشروع الوايت بورد';el('titleView').textContent=el('projectName').value=title}
 el('projectName').onchange=e=>{setTitle(e.target.value);queueSave()};
 el('projectMenu').onclick=()=>{if(recording||loading)return;stop();projectDialog.showModal()};
-function snapshot(){return {format:'rasm-studio',version:3,title,demo,ratio:el('ratio').value,quality:el('quality').value,selected,hand:handData,tip:handTip,audio:soundAsset,scenes:scenes.map(s=>{
- const {name,duration,speed,mode,tone,side,hold,paper,transition,sourceHand,handSize,weight,zones}=s;
- return {name,duration,speed,mode,tone,side,hold,paper,transition,sourceHand,handSize,weight,zones,image:s.asset??=s.src.toDataURL('image/png')};
- })}}
+const canvasBlob=c=>new Promise((ok,no)=>c.toBlob(b=>b?ok(b):no(Error('blob')),'image/png'));
+const asUrl=x=>typeof x==='string'?Promise.resolve(x):asData(x);
+// Settings are copied synchronously so edits made while images encode cannot tear the snapshot.
+// Images and audio stay Blobs for IndexedDB (no base64 bloat, no main-thread PNG encoding); the .rasm file gets data URLs.
+async function snapshot(forFile){
+ const rows=scenes.map(s=>{const {name,duration,speed,mode,tone,side,hold,paper,transition,sourceHand,handSize,weight}=s;return {scene:s,row:{name,duration,speed,mode,tone,side,hold,paper,transition,sourceHand,handSize,weight,zones:s.zones.map(z=>({...z}))}}});
+ const head={format:'rasm-studio',version:3,title,demo,ratio:el('ratio').value,quality:el('quality').value,selected,hand:handData,tip:handTip};
+ const sound=soundAsset;
+ for(const item of rows){const s=item.scene;if(!s.asset)s.asset=await canvasBlob(s.src);item.row.image=forFile?await asUrl(s.asset):s.asset}
+ head.audio=sound?{name:sound.name,...(forFile?{data:sound.data??await asData(sound.blob)}:sound.blob?{blob:sound.blob}:{data:sound.data})}:null;
+ return {...head,scenes:rows.map(i=>i.row)}
+}
 function dbRequest(req){return new Promise((ok,no)=>{req.onsuccess=()=>ok(req.result);req.onerror=()=>no(req.error)})}
-async function save(revision){if(restoring||!db)return;try{const data=snapshot(),tx=db.transaction('projects','readwrite');tx.objectStore('projects').put(data,'current');await new Promise((ok,no)=>{tx.oncomplete=ok;tx.onabort=tx.onerror=no});if(revision===saveRevision)el('saveState').textContent='محفوظ على الجهاز'}catch{el('saveState').textContent='تعذّر الحفظ المحلي · نزّل نسخة من ملف المشروع'}}
+let askedPersist=false;
+async function save(revision){if(restoring||!db)return;try{const data=await snapshot(false),tx=db.transaction('projects','readwrite');tx.objectStore('projects').put(data,'current');await new Promise((ok,no)=>{tx.oncomplete=ok;tx.onabort=tx.onerror=no});if(revision===saveRevision)el('saveState').textContent='محفوظ على الجهاز';if(!askedPersist){askedPersist=true;navigator.storage?.persist?.().catch(()=>{})}}catch{el('saveState').textContent='تعذّر الحفظ المحلي · نزّل نسخة من ملف المشروع'}}
 function queueSave(){if(restoring)return;el('saveState').textContent='جاري حفظ التعديلات…';clearTimeout(timer);const revision=++saveRevision;timer=setTimeout(()=>save(revision),220)}
 if(!window.indexedDB)el('saveState').textContent='الحفظ المحلي غير متاح';
 const persistedInputs=new Set(['sourceHand','handSize','weight','ratio','quality','side','hold','paper','transition','duration','sceneName','style']);
 document.addEventListener('change',e=>{if(persistedInputs.has(e.target.id))queueSave()});
 document.addEventListener('click',e=>{if(e.target.closest('#hands, #earlier, #later, #remove'))queueSave()});
-el('backup').onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(snapshot())],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=title+'.rasm';a.click();setTimeout(()=>URL.revokeObjectURL(url),60000)};
+el('backup').onclick=async()=>{if(recording||loading)return;busy(true);try{const url=URL.createObjectURL(new Blob([JSON.stringify(await snapshot(true))],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=title+'.rasm';a.click();setTimeout(()=>URL.revokeObjectURL(url),60000)}catch{el('msg').textContent='تعذّر تجهيز نسخة المشروع.'}finally{busy(false)}};
 el('restore').onclick=()=>el('projectInput').click();
 async function readProject(p){
  if(p?.format!=='rasm-studio'||![2,3].includes(p.version)||!Array.isArray(p.scenes))throw Error('format');
  const restored=[];
  for(const row of p.scenes){
- if(!/^data:image\/(png|jpeg|webp);base64,/i.test(row?.image))throw Error('image');
- const img=new Image();img.src=row.image;await img.decode();
- const s=await RasmImageEngine.analyzeAsync(img,String(row.name||'مشهد').slice(0,120));Object.assign(s,{asset:row.image,speed:choose(row.speed,[.25,.5,.75,1],1),sourceHand:choose(row.sourceHand,['auto','detect','present','clean'],'auto'),weight:choose(row.weight,[1,1.4,2.3],1.4),handSize:within(row.handSize,55,160,100),zones:Array.isArray(row.zones)?row.zones.filter(z=>z&&['x','y','w','h'].every(k=>Number.isFinite(z[k])&&z[k]>=0&&z[k]<=1)).slice(0,80):[],duration:within(row.duration,1,120,6),hold:within(row.hold,0,70,18),side:choose(row.side,['1','-1'],'1'),tone:choose(row.tone,p.hand?[0,1,2,3,4]:[0,1,2,4],4),mode:choose(row.mode,['original','ink','color','fill'],'original'),paper:/^#[a-f0-9]{6}$/i.test(row.paper)?row.paper:'#ffffff',transition:choose(row.transition,['cut','fade'],'cut')});applyZones(s);restored.push(s)}
+ const blobImage=row?.image instanceof Blob&&/^image\/(png|jpeg|webp)$/.test(row.image.type);
+ if(!blobImage&&!/^data:image\/(png|jpeg|webp);base64,/i.test(row?.image))throw Error('image');
+ const imageUrl=blobImage?URL.createObjectURL(row.image):row.image;let s;
+ try{const img=new Image();img.src=imageUrl;await img.decode();s=await RasmImageEngine.analyzeAsync(img,String(row.name||'مشهد').slice(0,120))}finally{if(blobImage)URL.revokeObjectURL(imageUrl)}
+ Object.assign(s,{asset:row.image,speed:choose(row.speed,[.25,.5,.75,1],1),sourceHand:choose(row.sourceHand,['auto','detect','present','clean'],'auto'),weight:choose(row.weight,[1,1.4,2.3],1.4),handSize:within(row.handSize,55,160,100),zones:Array.isArray(row.zones)?row.zones.filter(z=>z&&['x','y','w','h'].every(k=>Number.isFinite(z[k])&&z[k]>=0&&z[k]<=1)).slice(0,80):[],duration:within(row.duration,1,120,6),hold:within(row.hold,0,70,18),side:choose(row.side,['1','-1'],'1'),tone:choose(row.tone,p.hand?[0,1,2,3,4]:[0,1,2,4],4),mode:choose(row.mode,['original','ink','color','fill'],'original'),paper:/^#[a-f0-9]{6}$/i.test(row.paper)?row.paper:'#ffffff',transition:choose(row.transition,['cut','fade'],'cut')});applyZones(s);restored.push(s)}
  let audio=null;
- if(p.audio){if(typeof p.audio.data!=='string'||!/^data:[^,]*;base64,/i.test(p.audio.data))throw Error('audio');audio=await audioEngine().decodeAudioData(await (await fetch(p.audio.data)).arrayBuffer())}
+ if(p.audio){if(p.audio.blob instanceof Blob)audio=await audioEngine().decodeAudioData(await p.audio.blob.arrayBuffer());else{if(typeof p.audio.data!=='string'||!/^data:[^,]*;base64,/i.test(p.audio.data))throw Error('audio');audio=await audioEngine().decodeAudioData(await (await fetch(p.audio.data)).arrayBuffer())}}
  let custom=null;if(p.hand){if(!/^data:image\/png;base64,/i.test(p.hand))throw Error('hand');custom=new Image();custom.src=p.hand;await custom.decode()}
- stop();clearRemoved();handImage=custom;handData=p.hand||null;handTip={x:within(p.tip?.x,0,100,5),y:within(p.tip?.y,0,100,88)};el('tipX').value=handTip.x;el('tipY').value=handTip.y;el('useHand').disabled=!custom;scenes=restored;demo=p.demo===true;soundBuffer=audio;soundAsset=p.audio||null;el('ratio').value=choose(p.ratio,['1.7777778','.5625','1'],'1.7777778');el('quality').value=choose(p.quality,['1280','1920'],'1280');setTitle(p.title);showAudio();selected=Math.floor(within(p.selected,0,Math.max(0,scenes.length-1),0));time=scenes.length?offset(selected)+sceneSeconds(scenes[selected])*.7:0;cache={};size();refresh()
+ stop();clearRemoved();handImage=custom;handData=p.hand||null;handTip={x:within(p.tip?.x,0,100,5),y:within(p.tip?.y,0,100,88)};el('tipX').value=handTip.x;el('tipY').value=handTip.y;el('useHand').disabled=!custom;scenes=restored;demo=p.demo===true;soundBuffer=audio;soundAsset=p.audio?{name:String(p.audio.name||'تسجيل').slice(0,200),...(p.audio.blob instanceof Blob?{blob:p.audio.blob}:{data:p.audio.data})}:null;el('ratio').value=choose(p.ratio,['1.7777778','.5625','1'],'1.7777778');el('quality').value=choose(p.quality,['1280','1920'],'1280');setTitle(p.title);showAudio();selected=Math.floor(within(p.selected,0,Math.max(0,scenes.length-1),0));time=scenes.length?offset(selected)+sceneSeconds(scenes[selected])*.7:0;cache={};size();refresh()
 }
 el('projectInput').onchange=async e=>{const file=e.target.files[0];if(!file)return;projectDialog.close();busy(true);try{await readProject(JSON.parse(await file.text()));queueSave();el('msg').textContent='تم فتح نسخة المشروع.'}catch{el('msg').textContent='تعذّر قراءة النسخة. المشروع الحالي ما زال مفتوح.'}finally{busy(false);e.target.value=''}};
 (async()=>{busy(true);setTitle(title);try{const req=indexedDB.open('rasm-studio',1);req.onupgradeneeded=()=>req.result.createObjectStore('projects');db=await dbRequest(req);const last=await dbRequest(db.transaction('projects').objectStore('projects').get('current'));if(last){try{await readProject(last)}catch(error){const keep='recovered-'+Date.now();await dbRequest(db.transaction('projects','readwrite').objectStore('projects').put(last,keep));el('saveState').textContent='تعذّر فتح المشروع المحفوظ. اتحفظت نسخة منه ('+keep+') ولن تُمسح.';return}}el('saveState').textContent=last?'تم استرجاع المشروع المحفوظ':'مشروع تجريبي · أضف صورك للبدء'}catch{db=null;el('saveState').textContent='تعذّر استرجاع الحفظ المحلي · الحفظ التلقائي متوقف حتى لا يُمسح شغلك. استخدم ملف المشروع'}finally{restoring=false;busy(false)}})();

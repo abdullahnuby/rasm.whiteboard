@@ -1,5 +1,5 @@
 'use strict';
-importScripts('motion.js', 'engine.js');
+importScripts('engine.js');
 self.onmessage = event => {
   const { id, width, height, pixels } = event.data || {};
   try {

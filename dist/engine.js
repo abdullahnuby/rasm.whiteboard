@@ -218,7 +218,7 @@
       if (direction < 0) break;
       collect(trace(p, direction));
     }
-    paths.sort((a, b) => Math.abs(a.centerY - b.centerY) > 3 ? a.centerY - b.centerY : a.centerX - b.centerX);
+    paths.sort((a, b) => (Math.floor(a.centerY / 4) - Math.floor(b.centerY / 4)) || (a.centerX - b.centerX) || (a.centerY - b.centerY));
     let length = 0;
     const lines = paths.map(path => {
       const line = { points: path.points, color: path.color, start: length };
