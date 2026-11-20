@@ -42,7 +42,8 @@ for(const lines of [[],[{start:0,points:[[0,0],[1,0],[2,0]]}]]){
 // Exercise the same frame renderer used for playback and recording across
 // scene boundaries, including a flat, warm-coloured second image.
 const app=await readFile('dist/app.js','utf8');
-const frameCode=app.slice(app.indexOf('function render(t)'),app.indexOf('function stop()'));
+const helperCode=app.slice(app.indexOf('function pointAt('),app.indexOf('function house('));
+const frameCode=helperCode+app.slice(app.indexOf('function render(t)'),app.indexOf('function stop()'));
 const imageData=(w,h)=>({data:new Uint8ClampedArray(w*h*4)});
 let lineToCount=0;const canvasContext={fillRect(){},save(){},restore(){},translate(){},scale(){},drawImage(){},beginPath(){},moveTo(){},lineTo(){lineToCount++},stroke(){},createImageData:imageData,putImageData(){}};
 const strokes=[{start:0,points:[[0,0],[1,0],[1,1],[2,1]]}];
