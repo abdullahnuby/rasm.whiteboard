@@ -213,7 +213,7 @@ async function readProject(p){
  clearOperationStatus();stop();clearRemoved();handImage=custom;handData=p.hand||null;
  handTip={x:within(p.tip?.x,0,100,5),y:within(p.tip?.y,0,100,88)};
  el('tipX').value=handTip.x;el('tipY').value=handTip.y;el('useHand').disabled=!custom;
- scenes=restored;demo=p.demo===true;soundBuffer=audio;
+ scenes=restored;prewarmColorSchedules(restored);demo=p.demo===true;soundBuffer=audio;
  soundAsset=p.audio?{name:String(p.audio.name||'تسجيل').slice(0,200),...(p.audio.blob instanceof Blob?{blob:p.audio.blob}:{data:p.audio.data})}:null;
  el('ratio').value=choose(p.ratio,['1.7777778','.5625','1'],'1.7777778');
  el('quality').value=choose(p.quality,['1280','1920'],'1280');

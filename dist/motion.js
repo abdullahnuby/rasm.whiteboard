@@ -26,13 +26,52 @@ function applyZones(scene){
 
 // Map each source pixel to a reveal time. Interior pixels follow their
 // nearest traced edge, so solid fills retain their original RGB values.
-const schedules=new WeakMap();
+const schedules=new WeakMap(),scheduleQueued=new WeakSet(),scheduleJobs=new Map();
+let scheduleWorker=null,scheduleJobId=0;
+function linearColorSchedule(scene){
+ const count=scene.src.width*scene.src.height,ends=new Uint32Array(257);
+ for(let t=0;t<=256;t++)ends[t]=Math.floor(count*t/256);
+ return {order:null,ends,linear:true}
+}
+function failScheduleWorker(){
+ for(const [id,job] of scheduleJobs){
+  scheduleJobs.delete(id);scheduleQueued.delete(job.lines);
+  schedules.set(job.lines,{w:job.width,h:job.height,plan:linearColorSchedule(job.scene)});
+ }
+ scheduleWorker?.terminate();scheduleWorker=null;
+}
+function getScheduleWorker(){
+ if(typeof Worker!=='function')return null;
+ if(scheduleWorker)return scheduleWorker;
+ try{
+  scheduleWorker=new Worker('motion-worker.js');
+  scheduleWorker.onmessage=event=>{
+   const job=scheduleJobs.get(event.data.id);if(!job)return;
+   scheduleJobs.delete(event.data.id);scheduleQueued.delete(job.lines);
+   const plan=event.data.error?linearColorSchedule(job.scene):event.data.plan;
+   schedules.set(job.lines,{w:job.width,h:job.height,plan});
+  };
+  scheduleWorker.onerror=failScheduleWorker;
+  return scheduleWorker;
+ }catch{return null}
+}
+function requestColorSchedule(scene){
+ const lines=scene.lines,width=scene.src.width,height=scene.src.height;
+ if(scheduleQueued.has(lines))return;
+ const worker=getScheduleWorker();
+ if(!worker){schedules.set(lines,{w:width,h:height,plan:linearColorSchedule(scene)});return}
+ const id=++scheduleJobId;scheduleQueued.add(lines);scheduleJobs.set(id,{scene,lines,width,height});
+ try{
+  worker.postMessage({id,width,height,length:scene.length,lines:lines.map(line=>({start:line.start,points:line.points}))});
+ }catch{
+  scheduleJobs.delete(id);scheduleQueued.delete(lines);
+  schedules.set(lines,{w:width,h:height,plan:linearColorSchedule(scene)});
+ }
+}
 function colorSchedule(scene){
  const cached=schedules.get(scene.lines);
  if(cached&&cached.w===scene.src.width&&cached.h===scene.src.height)return cached.plan;
- const plan=buildColorSchedule(scene);
- schedules.set(scene.lines,{w:scene.src.width,h:scene.src.height,plan});
- return plan
+ requestColorSchedule(scene);return schedules.get(scene.lines)?.plan||null;
 }
 function buildColorSchedule(scene){
  const w=scene.src.width,h=scene.src.height,n=w*h;
@@ -61,7 +100,8 @@ function revealPixels(layer,frac){
  const count=layer.ends[Math.min(256,Math.floor(256*frac))];
  if(count===layer.count)return false;
  if(count<layer.count){layer.output.fill(0);layer.count=0}
- for(let i=layer.count;i<count;i++){const p=layer.order[i];layer.output[p]=layer.source[p]}
+ if(layer.linear){for(let i=layer.count;i<count;i++)layer.output[i]=layer.source[i]}
+ else for(let i=layer.count;i<count;i++){const p=layer.order[i];layer.output[p]=layer.source[p]}
  layer.count=count;return true
 }
 
