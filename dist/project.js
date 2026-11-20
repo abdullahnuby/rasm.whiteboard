@@ -16,20 +16,20 @@ function audioEngine(){return audioContext??=new (window.AudioContext||window.we
 async function readySound(){if(soundBuffer)await audioEngine().resume()}
 function stopSound(){if(audioSource){try{audioSource.stop()}catch{}audioSource.disconnect();audioSource=null}}
 function startSound(at){if(!soundBuffer||at>=soundBuffer.duration)return;const c=audioEngine();audioSource=c.createBufferSource();audioSource.buffer=soundBuffer;audioSource.connect(c.destination);if(recordBus)audioSource.connect(recordBus);audioSource.start(0,at)}
-function showAudio(){el('audioInfo').textContent=soundAsset?soundAsset.name+' · '+soundBuffer.duration.toFixed(1)+' ث': 'مفيش تسجيل مضاف';el('audioClear').hidden=!soundAsset;el('audioPick').textContent=soundAsset?'تغيير التسجيل':'إضافة تسجيل'}
+function showAudio(){el('audioInfo').textContent=soundAsset?soundAsset.name+' · '+soundBuffer.duration.toFixed(1)+' ث': 'مفيش تسجيل مضاف';el('audioClear').hidden=!soundAsset;el('audioPick').textContent=soundAsset?'تغيير التسجيل':'إضافة تسجيل';setAudioTimeline(soundBuffer?.duration||0,soundAsset?.name,soundBuffer)}
 el('audioPick').onclick=()=>el('soundFile').click();
 function isAudioFile(file){return file.type.startsWith('audio/')||/\.(mp3|m4a|aac|wav|ogg|flac|opus|weba)$/i.test(file.name)}
 const MAX_AUDIO_BYTES=80*1048576;
 async function attachRecording(file){
  if(!file||recording||loading)return;
  if(file.size>MAX_AUDIO_BYTES){el('msg').textContent='ملف الصوت أكبر من 80 ميجابايت. قسّمه أو اضغطه.';return}
- stop();busy(true);el('msg').textContent='جاري تجهيز التسجيل…';
+ stop();busy(true);setOperationStatus('جاري فك ترميز التسجيل الصوتي',0,1);el('msg').textContent='جاري تجهيز التسجيل…';
  try{
   const decoded=await audioEngine().decodeAudioData(await file.arrayBuffer());
-  soundBuffer=decoded;soundAsset={name:String(file.name).slice(0,200),blob:file};showAudio();queueSave();
+  soundBuffer=decoded;soundAsset={name:String(file.name).slice(0,200),blob:file};showAudio();setOperationStatus('تم تجهيز التسجيل الصوتي',1,1);queueSave();
   el('msg').textContent='تمت إضافة التسجيل · '+decoded.duration.toFixed(1)+' ثانية';
  }catch{el('msg').textContent='تعذّر فتح التسجيل. جرّب نسخة MP3 أو WAV محفوظة في تطبيق الملفات.'}
- finally{busy(false)}
+ finally{busy(false);clearOperationStatus()}
 }
 async function importMedia(items){
  if(loading||recording)return;
@@ -83,13 +83,14 @@ document.addEventListener('change',e=>{if(persistedInputs.has(e.target.id))queue
 document.addEventListener('click',e=>{if(e.target.closest('#hands, #earlier, #later, #remove'))queueSave()});
 async function downloadProjectData(data,fileName){
  const copy={...data,scenes:[]};
- for(const row of data.scenes||[]){
-  const image=row.image instanceof Blob?await asData(row.image):row.image;
-  copy.scenes.push({...row,image});
+ for(let i=0;i<(data.scenes||[]).length;i++){
+  const row=data.scenes[i],image=row.image instanceof Blob?await asData(row.image):row.image;
+  copy.scenes.push({...row,image});setOperationStatus('تجهيز الصور في النسخة الاحتياطية',i+1,data.scenes.length);
  }
  if(data.audio){
+  setOperationStatus('تجهيز تسجيل المشروع',0,1);
   const audioData=data.audio.blob instanceof Blob?await asData(data.audio.blob):data.audio.data;
-  copy.audio={name:String(data.audio.name||'تسجيل').slice(0,200),data:audioData};
+  copy.audio={name:String(data.audio.name||'تسجيل').slice(0,200),data:audioData};setOperationStatus('تجهيز تسجيل المشروع',1,1);
  }
  const blob=new Blob([JSON.stringify(copy)],{type:'application/json'});
  const url=URL.createObjectURL(blob),a=document.createElement('a');
@@ -98,9 +99,9 @@ async function downloadProjectData(data,fileName){
 }
 el('backup').onclick=async()=>{
  if(recording||loading)return;
- busy(true);
+ projectDialog.close();busy(true);setOperationStatus('تجهيز نسخة المشروع',0,Math.max(1,scenes.length));
  try{await downloadProjectData(await snapshot(false),title)}
- catch{el('msg').textContent='تعذّر تجهيز نسخة المشروع.'}
+ catch{clearOperationStatus();el('msg').textContent='تعذّر تجهيز نسخة المشروع.'}
  finally{busy(false)}
 };
 el('restore').onclick=()=>el('projectInput').click();
@@ -131,16 +132,16 @@ async function listRecovered(){
    name.textContent=(item.value?.title||'مشروع مسترد')+' · '+item.key;
    const open=document.createElement('button');open.className='recoverOpen';open.textContent='محاولة الفتح';
    open.onclick=async()=>{
-    busy(true);
+    projectDialog.close();busy(true);
     try{await readProject(item.value);queueSave();projectDialog.close();el('msg').textContent='تم فتح النسخة المستردة.'}
-    catch{el('msg').textContent='لم تنجح استعادة هذه النسخة. ما زالت محفوظة ويمكن تنزيلها.'}
+    catch{clearOperationStatus();el('msg').textContent='لم تنجح استعادة هذه النسخة. ما زالت محفوظة ويمكن تنزيلها.'}
     finally{busy(false)}
    };
    const download=document.createElement('button');download.textContent='تنزيل النسخة';
    download.onclick=async()=>{
-    busy(true);
+    projectDialog.close();busy(true);
     try{await downloadProjectData(item.value,item.value?.title||item.key);el('msg').textContent='تم تجهيز نسخة الاسترداد للتنزيل.'}
-    catch{el('msg').textContent='تعذّر تجهيز ملف الاسترداد.'}
+    catch{clearOperationStatus();el('msg').textContent='تعذّر تجهيز ملف الاسترداد.'}
     finally{busy(false)}
    };
    const remove=document.createElement('button');remove.textContent='حذف النسخة';
@@ -160,7 +161,9 @@ async function listRecovered(){
 async function readProject(p){
  if(p?.format!=='rasm-studio'||![2,3].includes(p.version)||!Array.isArray(p.scenes)||p.scenes.length>300)throw Error('format-or-scene-limit');
  const restored=[];let totalPixels=0;
- for(const row of p.scenes){
+ setOperationStatus('إعادة تحليل مشاهد المشروع',0,p.scenes.length);
+ for(let sceneIndex=0;sceneIndex<p.scenes.length;sceneIndex++){
+  const row=p.scenes[sceneIndex];
   const blobImage=row?.image instanceof Blob&&/^image\/(png|jpeg|webp)$/.test(row.image.type);
   if(!blobImage&&!/^data:image\/(png|jpeg|webp);base64,/i.test(row?.image))throw Error('image');
   if(blobImage&&row.image.size>MAX_IMAGE_BYTES)throw Error('image-size');
@@ -180,7 +183,7 @@ async function readProject(p){
    weight:choose(row.weight,[1,1.4,2.3],1.4),
    handSize:within(row.handSize,55,160,100),
    zones:Array.isArray(row.zones)?row.zones.filter(z=>z&&['x','y','w','h'].every(k=>Number.isFinite(z[k])&&z[k]>=0&&z[k]<=1)).slice(0,80):[],
-   duration:within(row.duration,1,120,6),
+   duration:within(row.duration,.125,180,6),
    hold:within(row.hold,0,70,18),
    side:choose(row.side,['1','-1'],'1'),
    tone:choose(row.tone,p.hand?[0,1,2,3,4]:[0,1,2,4],4),
@@ -188,10 +191,11 @@ async function readProject(p){
    paper:/^#[a-f0-9]{6}$/i.test(row.paper)?row.paper:'#ffffff',
    transition:choose(row.transition,['cut','fade'],'cut')
   });
-  applyZones(s);restored.push(s);
+  applyZones(s);restored.push(s);setOperationStatus('إعادة تحليل المشاهد · '+(sceneIndex+1)+' / '+p.scenes.length,sceneIndex+1,p.scenes.length);
  }
  let audio=null;
  if(p.audio){
+  setOperationStatus('فك ترميز التسجيل الصوتي',0,1);
   if(p.audio.blob instanceof Blob){
    if(p.audio.blob.size>MAX_AUDIO_BYTES)throw Error('audio-size');
    audio=await audioEngine().decodeAudioData(await p.audio.blob.arrayBuffer());
@@ -199,13 +203,14 @@ async function readProject(p){
    if(typeof p.audio.data!=='string'||!/^data:[^,]*;base64,/i.test(p.audio.data)||p.audio.data.length>MAX_AUDIO_BYTES*1.42)throw Error('audio');
    audio=await audioEngine().decodeAudioData(await (await fetch(p.audio.data)).arrayBuffer());
   }
+  setOperationStatus('تم فك ترميز التسجيل الصوتي',1,1);
  }
  let custom=null;
  if(p.hand){
   if(!/^data:image\/png;base64,/i.test(p.hand))throw Error('hand');
   custom=new Image();custom.src=p.hand;await custom.decode();
  }
- stop();clearRemoved();handImage=custom;handData=p.hand||null;
+ clearOperationStatus();stop();clearRemoved();handImage=custom;handData=p.hand||null;
  handTip={x:within(p.tip?.x,0,100,5),y:within(p.tip?.y,0,100,88)};
  el('tipX').value=handTip.x;el('tipY').value=handTip.y;el('useHand').disabled=!custom;
  scenes=restored;demo=p.demo===true;soundBuffer=audio;
@@ -225,4 +230,4 @@ el('projectInput').onchange=async e=>{
  catch{el('msg').textContent='تعذّر قراءة النسخة. المشروع الحالي ما زال مفتوح.'}
  finally{busy(false);e.target.value=''}
 };
-(async()=>{busy(true);setTitle(title);try{const req=indexedDB.open('rasm-studio',1);req.onupgradeneeded=()=>req.result.createObjectStore('projects');db=await dbRequest(req);const last=await dbRequest(db.transaction('projects').objectStore('projects').get('current'));if(last){try{await readProject(last)}catch(error){const keep='recovered-'+Date.now();await dbRequest(db.transaction('projects','readwrite').objectStore('projects').put(last,keep));el('saveState').textContent='تعذّر فتح المشروع المحفوظ. اتحفظت نسخة منه ('+keep+') ولن تُمسح.';return}}el('saveState').textContent=last?'تم استرجاع المشروع المحفوظ':'مشروع تجريبي · أضف صورك للبدء'}catch{db=null;el('saveState').textContent='تعذّر استرجاع الحفظ المحلي · الحفظ التلقائي متوقف حتى لا يُمسح شغلك. استخدم ملف المشروع'}finally{restoring=false;busy(false)}})();
+(async()=>{busy(true);setTitle(title);try{const req=indexedDB.open('rasm-studio',1);req.onupgradeneeded=()=>req.result.createObjectStore('projects');db=await dbRequest(req);const last=await dbRequest(db.transaction('projects').objectStore('projects').get('current'));if(last){try{await readProject(last)}catch(error){clearOperationStatus();const keep='recovered-'+Date.now();await dbRequest(db.transaction('projects','readwrite').objectStore('projects').put(last,keep));el('saveState').textContent='تعذّر فتح المشروع المحفوظ. اتحفظت نسخة منه ('+keep+') ولن تُمسح.';return}}el('saveState').textContent=last?'تم استرجاع المشروع المحفوظ':'مشروع تجريبي · أضف صورك للبدء'}catch{db=null;el('saveState').textContent='تعذّر استرجاع الحفظ المحلي · الحفظ التلقائي متوقف حتى لا يُمسح شغلك. استخدم ملف المشروع'}finally{restoring=false;busy(false)}})();

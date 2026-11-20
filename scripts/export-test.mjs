@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import vm from 'node:vm';
+const context=vm.createContext({});
+vm.runInContext(await readFile('dist/export.js','utf8'),context);
+const api=context.RasmExport;
+const supported=new Set(['video/webm;codecs=vp8,opus','video/webm']);
+const fakeRecorder={isTypeSupported(type){return supported.has(type)}};
+assert.equal(api.pickMimeType(fakeRecorder),'video/webm;codecs=vp8,opus');
+assert.equal(api.pickMimeType({isTypeSupported(){return false}}),'');
+assert.equal(api.pickMimeType(null),'');
+assert.equal(api.frameDue(100,0,1000/30),true);
+assert.equal(api.frameDue(120,100,1000/30),false);
+assert.equal(api.frameDue(134,100,1000/30),true);
+assert.equal(api.frameDue(101,100,1000/30,true),true);
+assert.equal(api.fileExtension('video/mp4;codecs="avc1.42E01E,mp4a.40.2"'),'mp4');
+assert.equal(api.fileExtension('video/webm;codecs=vp9,opus'),'webm');
+console.log('RASM export tests passed.');
