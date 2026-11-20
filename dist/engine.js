@@ -146,6 +146,165 @@
     return output;
   }
 
+  function foregroundMask(data, width, height) {
+    const step = Math.max(1, Math.floor(Math.min(width, height) / 160));
+    const samples = [[], [], []];
+    function sample(x, y) {
+      const p = (y * width + x) * 4;
+      for (let c = 0; c < 3; c++) samples[c].push(data[p + c]);
+    }
+    for (let x = 0; x < width; x += step) {
+      sample(x, 0); sample(x, height - 1);
+    }
+    for (let y = step; y < height - 1; y += step) {
+      sample(0, y); sample(width - 1, y);
+    }
+    const background = samples.map(values => {
+      values.sort((a, b) => a - b);
+      return values[values.length >> 1] || 255;
+    });
+    const bgLuma = background[0] * .299 + background[1] * .587 + background[2] * .114;
+    const darkForeground = bgLuma >= 128;
+    const mask = new Uint8Array(width * height);
+    let count = 0;
+    for (let p = 0, q = 0; p < mask.length; p++, q += 4) {
+      const r = data[q], g = data[q + 1], b = data[q + 2];
+      const lum = r * .299 + g * .587 + b * .114;
+      const delta = darkForeground ? bgLuma - lum : lum - bgLuma;
+      const colorDistance = Math.hypot((r - background[0]) * .82, g - background[1], (b - background[2]) * .82);
+      if (delta >= 24 || colorDistance >= 52) { mask[p] = 1; count++; }
+    }
+    const density = count / mask.length;
+    if (density < .0012 || density > .32) return null;
+    return { mask, density, background };
+  }
+
+  function thinForeground(source, width, height) {
+    const mask = source.slice(), remove = new Uint8Array(source.length);
+    let iterations = 0, changed = true;
+    while (changed && iterations < 48) {
+      changed = false;
+      for (let phase = 0; phase < 2; phase++) {
+        let marked = 0;
+        for (let y = 1; y < height - 1; y++) for (let x = 1; x < width - 1; x++) {
+          const p = y * width + x;
+          if (!mask[p]) continue;
+          const p2 = mask[p - width], p3 = mask[p - width + 1];
+          const p4 = mask[p + 1], p5 = mask[p + width + 1];
+          const p6 = mask[p + width], p7 = mask[p + width - 1];
+          const p8 = mask[p - 1], p9 = mask[p - width - 1];
+          const neighbors = p2 + p3 + p4 + p5 + p6 + p7 + p8 + p9;
+          if (neighbors < 2 || neighbors > 6) continue;
+          let transitions = 0;
+          if (!p2 && p3) transitions++;
+          if (!p3 && p4) transitions++;
+          if (!p4 && p5) transitions++;
+          if (!p5 && p6) transitions++;
+          if (!p6 && p7) transitions++;
+          if (!p7 && p8) transitions++;
+          if (!p8 && p9) transitions++;
+          if (!p9 && p2) transitions++;
+          if (transitions !== 1) continue;
+          const removeCondition = phase === 0
+            ? p2 * p4 * p6 === 0 && p4 * p6 * p8 === 0
+            : p2 * p4 * p8 === 0 && p2 * p6 * p8 === 0;
+          if (removeCondition) { remove[p] = 1; marked++; }
+        }
+        if (marked) {
+          changed = true;
+          for (let p = 0; p < mask.length; p++) if (remove[p]) { mask[p] = 0; remove[p] = 0; }
+        }
+      }
+      iterations++;
+    }
+    return { mask, iterations };
+  }
+
+  function extractCenterlinePaths(data, width, height) {
+    const foreground = foregroundMask(data, width, height);
+    if (!foreground) return { lines: [], length: 0, metrics: { available: false, reason: 'background-or-density' } };
+    const thinned = thinForeground(foreground.mask, width, height);
+    const { adjacency, degree } = buildAdjacency(thinned.mask, width, height);
+    const paths = [];
+    let discarded = 0;
+    function removeEdge(p, q, direction) {
+      adjacency[p] &= ~(1 << direction);
+      adjacency[q] &= ~(1 << ((direction + 4) & 7));
+    }
+    function trace(start, first) {
+      const points = [[start % width, (start / width) | 0]];
+      let current = start, direction = first, guard = 0;
+      while (direction >= 0 && guard++ <= width * height) {
+        const x = current % width, y = (current / width) | 0;
+        const next = (y + DY[direction]) * width + x + DX[direction];
+        if (next < 0 || next >= width * height) break;
+        removeEdge(current, next, direction);
+        current = next;
+        points.push([current % width, (current / width) | 0]);
+        if (current === start || degree[current] !== 2) break;
+        direction = firstDirection(adjacency[current]);
+      }
+      return points;
+    }
+    function collect(points) {
+      if (points.length < 2) return;
+      let distance = 0, red = 0, green = 0, blue = 0;
+      for (let i = 0; i < points.length; i++) {
+        const point = points[i];
+        const x = Math.max(0, Math.min(width - 1, Math.round(point[0])));
+        const y = Math.max(0, Math.min(height - 1, Math.round(point[1])));
+        const index = (y * width + x) * 4;
+        red += data[index]; green += data[index + 1]; blue += data[index + 2];
+        if (i) distance += Math.hypot(point[0] - points[i - 1][0], point[1] - points[i - 1][1]);
+      }
+      if (distance < 3.5) { discarded++; return; }
+      let smooth = resamplePolyline(simplifyPolyline(points, .8), 1.5);
+      const first = smooth[0], last = smooth[smooth.length - 1];
+      const closed = Math.hypot(first[0] - last[0], first[1] - last[1]) < .01;
+      if (!closed) {
+        const dx = last[0] - first[0], dy = last[1] - first[1];
+        if ((Math.abs(dx) >= Math.abs(dy) && first[0] < last[0]) ||
+            (Math.abs(dx) < Math.abs(dy) && first[1] > last[1])) smooth = smooth.slice().reverse();
+      }
+      paths.push({
+        points: smooth,
+        color: 'rgb(' + [red, green, blue].map(v => Math.round(v / points.length * .82)).join(',') + ')',
+        centerX: points.reduce((sum, p) => sum + p[0], 0) / points.length,
+        centerY: points.reduce((sum, p) => sum + p[1], 0) / points.length
+      });
+    }
+    for (let p = 0; p < degree.length; p++) {
+      if (!degree[p] || degree[p] === 2) continue;
+      while (adjacency[p]) {
+        const direction = firstDirection(adjacency[p]);
+        if (direction < 0) break;
+        collect(trace(p, direction));
+      }
+    }
+    for (let p = 0; p < degree.length; p++) while (adjacency[p]) {
+      const direction = firstDirection(adjacency[p]);
+      if (direction < 0) break;
+      collect(trace(p, direction));
+    }
+    paths.sort((a, b) =>
+      (Math.floor(a.centerY / 7) - Math.floor(b.centerY / 7)) ||
+      (b.centerX - a.centerX) || (a.centerY - b.centerY)
+    );
+    let length = 0;
+    const lines = paths.map(path => {
+      const line = { points: path.points, color: path.color, start: length };
+      length += path.points.length;
+      return line;
+    });
+    return {
+      lines, length,
+      metrics: {
+        available: lines.length > 0, paths: lines.length, discardedPaths: discarded,
+        foregroundDensity: foreground.density, thinningIterations: thinned.iterations
+      }
+    };
+  }
+
   function extractPaths(data, width, height, options) {
     options = options || {};
     if (!Number.isInteger(width) || !Number.isInteger(height) || width < 3 || height < 3 || !data || data.length !== width * height * 4) {
@@ -225,8 +384,10 @@
       length += path.points.length;
       return line;
     });
+    const centerline = extractCenterlinePaths(data, width, height);
     return {
       lines, length,
+      centerLines: centerline.lines, centerLength: centerline.length, centerMetrics: centerline.metrics,
       metrics: { width, height, edgePixels: linked.count, paths: lines.length, discardedPaths: discarded,
         highThreshold: Math.round(thresholds.high), lowThreshold: Math.round(thresholds.low) }
     };
@@ -245,8 +406,8 @@
   function makeScene(name, source, result, handHint) {
     const defaults = { speed: 0.5, mode: 'original', tone: 4, sourceHand: 'auto', handSize: 100,
       weight: 1.4, side: '1', hold: 18, paper: '#ffffff', transition: 'cut' };
-    return { name, src: source.src, baseLines: result.lines, zones: [], handHint: !!handHint,
-      thumb: source.src.toDataURL('image/jpeg', 0.65), lines: result.lines, length: result.length,
+    return { name, src: source.src, baseLines: result.lines, centerBaseLines: result.centerLines || [], centerMetrics: result.centerMetrics || null, motionStyle: 'smart', zones: [], handHint: !!handHint,
+      thumb: source.src.toDataURL('image/jpeg', 0.65), lines: result.centerLines && result.centerLines.length ? result.centerLines : result.lines, length: result.centerLines && result.centerLines.length ? result.centerLength : result.length,
       duration: 6, engineVersion: 4, metrics: result.metrics, ...defaults };
   }
 

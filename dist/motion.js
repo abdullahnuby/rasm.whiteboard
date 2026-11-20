@@ -18,10 +18,13 @@ function edgeSkinRegion(data,w,h){
 }
 function overlayEnabled(s){return s.tone!==2&&s.sourceHand!=='present'&&(s.sourceHand!=='detect'||!s.handHint)}
 function applyZones(scene){
+ const center=scene.motionStyle!=='contour'&&Array.isArray(scene.centerBaseLines)&&scene.centerBaseLines.length>0;
+ const source=center?scene.centerBaseLines:scene.baseLines;
  const zones=scene.zones,groups=Array.from({length:zones.length+1},()=>[]);
- for(const line of scene.baseLines){const point=line.points[Math.floor(line.points.length/2)],x=point[0]/scene.src.width,y=point[1]/scene.src.height;
+ for(const line of source){const point=line.points[Math.floor(line.points.length/2)],x=point[0]/scene.src.width,y=point[1]/scene.src.height;
  const idx=zones.findIndex(z=>x>=z.x&&y>=z.y&&x<=z.x+z.w&&y<=z.y+z.h);groups[idx<0?zones.length:idx].push(line)}
- let start=0;scene.lines=groups.flat().map(line=>{const result={...line,start};start+=line.points.length;return result})
+ let start=0;scene.lines=groups.flat().map(line=>{const result={...line,start};start+=line.points.length;return result});
+ scene.length=start;scene.usingCenterline=center
 }
 
 // Map each source pixel to a reveal time. Interior pixels follow their
@@ -128,7 +131,12 @@ function strokeProgress(scene,fraction){
  const seg=plan.segments[low];
  if(distance<seg.draw){
   const t=(distance-seg.begin)/(seg.draw-seg.begin);
-  return {target:seg.line.start,tip:seg.first.map((v,i)=>seg.previous[i]+(v-seg.previous[i])*t)}
+  return {target:seg.line.start,tip:seg.first.map((v,i)=>seg.previous[i]+(v-seg.previous[i])*t),drawing:false}
  }
- return {target:Math.min(scene.length,seg.line.start+Math.floor(distance-seg.draw))}
+ const position=Math.max(0,Math.min(seg.line.points.length,distance-seg.draw));
+ const pointIndex=Math.min(seg.line.points.length-1,Math.floor(position));
+ const pointFraction=position-pointIndex;
+ const current=seg.line.points[pointIndex],next=seg.line.points[Math.min(seg.line.points.length-1,pointIndex+1)];
+ const tip=pointFraction>0?current.map((value,i)=>value+(next[i]-value)*pointFraction):current;
+ return {target:Math.min(scene.length,seg.line.start+position),tip,drawing:true}
 }

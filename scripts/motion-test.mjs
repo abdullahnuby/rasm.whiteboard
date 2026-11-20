@@ -18,6 +18,14 @@ const scene={src:{width:100,height:100},zones:[{x:0,y:0,w:.3,h:.3}],baseLines:[f
 core.applyZones(scene);
 assert.equal(scene.lines[0].points,second.points);
 assert.equal(scene.lines[1].start,2);
+const centerStroke={points:[[50,50],[60,50]]};
+const adaptive={src:{width:100,height:100},zones:[],baseLines:[first,second],centerBaseLines:[centerStroke],motionStyle:'smart'};
+core.applyZones(adaptive);
+assert.equal(adaptive.lines[0].points,centerStroke.points);
+assert.equal(adaptive.length,2);
+adaptive.motionStyle='contour';core.applyZones(adaptive);
+assert.equal(adaptive.lines[0].points,first.points);
+assert.equal(adaptive.length,4);
 if(process.argv[2]){
  const bytes=await readFile(process.argv[2]);
  assert.equal(core.edgeSkinRegion(bytes,485,493),true);
@@ -34,9 +42,10 @@ for(const lines of [[],[{start:0,points:[[0,0],[1,0],[2,0]]}]]){
 // Exercise the same frame renderer used for playback and recording across
 // scene boundaries, including a flat, warm-coloured second image.
 const app=await readFile('dist/app.js','utf8');
-const frameCode=app.slice(app.indexOf('function render(t)'),app.indexOf('function stop()'));
+const helperCode=app.slice(app.indexOf('function pointAt('),app.indexOf('function house('));
+const frameCode=helperCode+app.slice(app.indexOf('function render(t)'),app.indexOf('function stop()'));
 const imageData=(w,h)=>({data:new Uint8ClampedArray(w*h*4)});
-const canvasContext={fillRect(){},save(){},restore(){},translate(){},scale(){},drawImage(){},createImageData:imageData,putImageData(){}};
+let lineToCount=0;const canvasContext={fillRect(){},save(){},restore(){},translate(){},scale(){},drawImage(){},beginPath(){},moveTo(){},lineTo(){lineToCount++},stroke(){},createImageData:imageData,putImageData(){}};
 const strokes=[{start:0,points:[[0,0],[1,0],[1,1],[2,1]]}];
 const frames=[false,true,false].map(flat=>({
  duration:2,hold:10,mode:'original',tone:4,side:'1',handSize:100,sourceHand:'auto',handHint:flat,lines:flat?[]:strokes,length:flat?0:4,
@@ -49,10 +58,21 @@ const render=vm.runInNewContext(frameCode+';render',{
 });
 for(const t of [.8,2.8,4.8,2.4]){const before=hands.length;render(t);assert.equal(hands.length,before+1)}
 frames[1].sourceHand='present';render(2.8);assert.equal(hands.length,4);
+frames[0].mode='ink';frames[0].hold=0;
+frames[0].lines=[{start:0,points:Array.from({length:100},(_,i)=>[i,0])}];frames[0].length=100;
+const beforeInk=lineToCount;render(.5);const firstInk=lineToCount-beforeInk;
+render(1);const secondInk=lineToCount-beforeInk;
+assert.ok(firstInk>0&&secondInk-firstInk>0,'Incremental hand path should add visible segments');
+assert.ok(secondInk<firstInk*2.5,'Previously painted path segments must not be redrawn on every frame');
 
 assert.equal(core.sceneSeconds({duration:6,speed:.5}),12);
+assert.equal(core.sceneSeconds({duration:6,speed:.1}),60);
 assert.equal(core.sceneSeconds({duration:6}),6);
 const spaced={length:4,lines:[{start:0,points:[[0,0],[1,0]]},{start:2,points:[[11,0],[12,0]]}]};
 const halfway=core.strokeProgress(spaced,.5);
 assert.equal(halfway.target,2);assert.equal(halfway.tip[0],6);
 assert.equal(core.strokeProgress(spaced,1).target,4);
+const interpolated=core.strokeProgress(spaced,12.5/14);
+assert.equal(interpolated.drawing,true);
+assert.ok(Math.abs(interpolated.target-2.5)<1e-9);
+assert.ok(Math.abs(interpolated.tip[0]-11.5)<1e-9);

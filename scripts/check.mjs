@@ -12,6 +12,8 @@ for (const file of ['app.js', 'project.js', 'zones.js', 'engine.js', 'engine-wor
     assert.ok(ids.includes(id), 'Missing control ' + id);
   }
 }
+assert.ok(html.includes('id="speedHint"'), 'Speed duration guidance must be present');
+assert.ok(html.includes('value="0.1"'), 'Very slow hand-speed preset must be available');
 assert.ok(html.indexOf('motion.js') < html.indexOf('engine.js'), 'motion.js must load before engine.js');
 assert.ok(html.indexOf('engine.js') < html.indexOf('app.js'), 'engine.js must load before app.js');
 
