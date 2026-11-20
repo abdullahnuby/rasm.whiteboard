@@ -26,12 +26,20 @@ function applyZones(scene){
 
 // Map each source pixel to a reveal time. Interior pixels follow their
 // nearest traced edge, so solid fills retain their original RGB values.
+const schedules=new WeakMap();
 function colorSchedule(scene){
+ const cached=schedules.get(scene.lines);
+ if(cached&&cached.w===scene.src.width&&cached.h===scene.src.height)return cached.plan;
+ const plan=buildColorSchedule(scene);
+ schedules.set(scene.lines,{w:scene.src.width,h:scene.src.height,plan});
+ return plan
+}
+function buildColorSchedule(scene){
  const w=scene.src.width,h=scene.src.height,n=w*h;
  const times=new Uint8Array(n),seen=new Uint8Array(n),queue=new Uint32Array(n);
  let head=0,tail=0;
  for(const line of scene.lines)for(let j=0;j<line.points.length;j++){
-  const [x,y]=line.points[j],p=y*w+x;
+  const x=Math.min(w-1,Math.max(0,Math.round(line.points[j][0]))),y=Math.min(h-1,Math.max(0,Math.round(line.points[j][1]))),p=y*w+x;
   if(!seen[p]){seen[p]=1;times[p]=Math.floor(230*(line.start+j)/scene.length);queue[tail++]=p}
  }
  if(!tail){for(let p=0;p<n;p++)times[p]=Math.floor(255*p/n)}
