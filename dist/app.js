@@ -17,6 +17,11 @@ function setOperationStatus(label,done=0,total=1){
  el('operationProgress').value=value/max*100;el('operationPercent').textContent=Math.round(value/max*100)+'%';
 }
 function clearOperationStatus(){const panel=el('operationStatus');if(panel)panel.hidden=true}
+function prewarmColorSchedules(items){
+ const queue=[...items];let index=0;
+ const warmNext=()=>{if(index>=queue.length)return;colorSchedule(queue[index++]);setTimeout(warmNext,0)};
+ setTimeout(warmNext,0);
+}
 function path(c,points,ink,width=1.4){c.beginPath();c.moveTo(...points[0]);for(let i=1;i<points.length;i++)c.lineTo(...points[i]);c.strokeStyle=ink;c.lineWidth=width;c.lineJoin=c.lineCap='round';c.stroke()}
 function house(phase){
  const img=surface(640,360),c=img.getContext('2d');c.fillStyle='#fff';c.fillRect(0,0,640,360);
@@ -241,7 +246,7 @@ async function importFiles(items){
   if(added.length){
    if(demo){scenes=[];clearRemoved()}
    demo=false;
-   const first=scenes.length;scenes.push(...added);pick(first);queueSave();
+   const first=scenes.length;scenes.push(...added);prewarmColorSchedules(added);pick(first);queueSave();
   }
   const cancelled=controller.cancelled;
   el('msg').textContent=(added.length?'تم تجهيز '+added.length+' مشهد. ':'')+
