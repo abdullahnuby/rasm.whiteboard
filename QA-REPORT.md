@@ -1,3 +1,26 @@
+# RASM Studio 5.2.2 QA Report
+
+## Root cause identified
+- The preview renderer compressed hand progress to 86% of the drawing interval (frac/.86).
+- The original raster image reveal then continued independently until 96% of the drawing interval (frac/.96), with a dedicated final 10% pixel-reveal ramp. This allowed pixels to appear after the hand had left an element.
+- The motion Worker request omitted each line's shapeId, the shape-group ownership metadata, and shapeSequence. The Worker therefore could not apply per-element completion windows even though the main thread had computed them.
+
+## Fixes
+- Hand progress is now strokeProgress(scene, frac), and the image reveal fraction follows motion.progress directly without a trailing reveal interval.
+- Raster reveal uses the full 0–255 timeline range; each element's final pixels reach the end of its final hand stroke.
+- Worker payload now includes line shape IDs, per-shape raster ownership labels, and sequence mode. The Worker constructs the same scheduling scene as the main thread.
+- New scenes default to 0.2× drawing speed. Legacy projects carrying the old default 0.5× are migrated to 0.2× on import. Projects saved by 5.2.2 preserve subsequent explicit speed selections.
+
+## Validation added
+- Worker integration test with two separated image elements: verifies all pixels in element 1 are revealed before element 2 begins, element 1's last pixel is revealed at the end of its final hand stroke, and element 2 starts when the hand arrives at its first path.
+- Schedule test validates the full 0–255 time range and element completion windows.
+- Build checks ensure the hand and image do not use independent .86/.96 reveal clocks.
+- Existing shape segmentation, directional routing, reliability, timeline, export, and development-server tests remain included.
+
+## Known limitations
+- Segmentation remains geometry-based. Visually touching letters or objects can be a single connected element and may need manual zones.
+- Playback and export with the user's actual mobile project still require visual acceptance on the preview build.
+
 # مراجعة رَسم Studio 5.2.1
 يعتمد هذا الإصدار على مراجعة مستودع main 5.1.0 ودمج إصلاح 5.1.1 كتأسيس لفرع محرك الأشكال.
 
