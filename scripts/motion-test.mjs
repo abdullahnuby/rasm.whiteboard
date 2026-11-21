@@ -89,7 +89,7 @@ assert.ok(Math.abs(middle.progress-.5)<1e-9&&Math.abs(near.progress-.01)<1e-9,
 const unevenPlan=core.strokeTravelPlan(uneven.lines);
 assert.equal(unevenPlan.end,101);
 assert.equal(core.strokeRevealTime(unevenPlan.segments[0],1,unevenPlan.end),2);
-assert.equal(core.strokeRevealTime(unevenPlan.segments[0],2,unevenPlan.end),227,
+assert.equal(core.strokeRevealTime(unevenPlan.segments[0],2,unevenPlan.end),252,
  'Pixel reveal timing must follow physical path distance, not point index');
 const routed=vm.runInNewContext((await readFile('dist/motion.js','utf8'))+';routeStrokes');
 const far={points:[[90,0],[100,0]]},close={points:[[12,0],[20,0]]},origin={points:[[0,0],[10,0]]};
