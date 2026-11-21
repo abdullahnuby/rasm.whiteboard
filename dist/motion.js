@@ -274,9 +274,15 @@ function buildColorSchedule(scene){
  }
  if(!tail&&!hasLabels){for(let p=0;p<n;p++)times[p]=Math.floor(255*p/n)}
  while(head<tail){
-  const p=queue[head++],x=p%w,label=hasLabels?labels[p]:0;
-  for(const k of [x>0?p-1:-1,x+1<w?p+1:-1,p-w,p+w]){
-   if(k<0||k>=n||seen[k])continue;
+  const p=queue[head++],x=p%w,y=(p/w)|0,label=hasLabels?labels[p]:0;
+  // Match OpenCV's 8-connected component labelling. A diagonal connection
+  // must remain inside the same drawable element during raster reveal too.
+  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+   if(!dx&&!dy)continue;
+   const nx=x+dx,ny=y+dy;
+   if(nx<0||nx>=w||ny<0||ny>=h)continue;
+   const k=ny*w+nx;
+   if(seen[k])continue;
    if(hasLabels&&(!label||labels[k]!==label))continue;
    seen[k]=1;times[k]=Math.min(255,times[p]+1);queue[tail++]=k;
   }
