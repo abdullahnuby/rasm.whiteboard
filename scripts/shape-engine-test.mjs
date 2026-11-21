@@ -19,6 +19,12 @@ const paths=[
 const result=engine.analyze(mask,width,height,paths,paths,null);
 assert.equal(result.rasterLabels.length,width*height);
 assert.ok(result.metrics.shapes>=2,'Detached strokes should become shape groups');
+assert.equal(result.metrics.shapes,4,'Nearby major objects must remain separate while detached dots attach to their glyph');
+assert.ok(result.centerGroups.every(group=>Array.isArray(group.rasterLabels)&&group.rasterLabels.length>0),
+ 'Every detected element needs the matching raster ownership id');
+const usedRasterIds=new Set(result.centerGroups.flatMap(group=>group.rasterLabels));
+assert.ok([...usedRasterIds].every(id=>[...result.rasterLabels].includes(id)),
+ 'Stroke ownership ids must match the IDs stored in the per-pixel label map');
 assert.equal(result.metrics.groupedCenterPaths,paths.length,'Every stroke must belong to a group');
 const assigned=result.centerGroups.filter(group=>group.lineIndices.length);
 assert.ok(assigned.length>=2&&assigned.length<paths.length,'Related strokes must be grouped, separate objects must stay separate');
