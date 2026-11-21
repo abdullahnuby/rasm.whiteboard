@@ -55,6 +55,14 @@ assert.ok(Array.isArray(horizontalResult.centerLines) && horizontalResult.center
   'A thick marker stroke should produce a centerline writing path');
 assert.ok(horizontalResult.centerLength < horizontalResult.length,
   'Centerline motion should use fewer points than tracing both stroke borders');
+assert.ok(horizontalResult.rasterLabels instanceof Uint16Array,
+  'Image analysis should return compact per-pixel shape ownership labels');
+assert.ok(horizontalResult.rasterLabels.length === 64 * 48,
+  'Shape ownership map must match the analysed image dimensions');
+assert.ok(horizontalResult.centerShapeGroups.length > 0,
+  'Centerline paths must be grouped into drawable shapes');
+assert.ok(horizontalResult.shapeMetrics.shapes > 0,
+  'Shape segmentation metrics must be returned');
 
 // Exercise image-edge handling: disconnected pixels at opposite ends must
 // never be joined by accidental linear-index wraparound.
