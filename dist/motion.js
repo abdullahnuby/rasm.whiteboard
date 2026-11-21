@@ -143,8 +143,10 @@ function strokeProgress(scene,fraction){
  if(!plan){
   let end=0,previous=null;
   const segments=scene.lines.map(line=>{
-   const points=line.points,first=points[0],cumulative=new Float64Array(points.length);
-   for(let i=1;i<points.length;i++)cumulative[i]=cumulative[i-1]+Math.hypot(points[i][0]-points[i-1][0],points[i][1]-points[i-1][1]);
+   const points=line.points,first=points[0];
+   const cumulative=line.cumulative&&(line.cumulative instanceof Float32Array||line.cumulative instanceof Float64Array)
+    ?line.cumulative
+    :(()=>{const values=new Float32Array(points.length);for(let i=1;i<points.length;i++)values[i]=values[i-1]+Math.hypot(points[i][0]-points[i-1][0],points[i][1]-points[i-1][1]);return values})();
    const gap=previous?Math.hypot(first[0]-previous[0],first[1]-previous[1]):0;
    const begin=end,draw=begin+gap,stroke=Math.max(.01,cumulative.at(-1));
    end=draw+stroke;const segment={begin,draw,end,previous,first,line,cumulative};
