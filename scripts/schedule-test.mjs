@@ -46,18 +46,34 @@ const groupedScene={
  src:{width:24,height:8},
  lines:[
   {start:0,shapeId:1,points:[[2,3],[3,3]]},
-  {start:2,shapeId:2,points:[[15,3],[16,3]]}
+  {start:2,shapeId:1,points:[[4,4],[5,4]]},
+  {start:4,shapeId:2,points:[[15,3],[16,3]]}
  ],
- length:4,rasterLabels:new Uint16Array(24*8)
+ length:6,shapeSequence:'smart',
+ shapeGroups:[
+  {id:1,rasterComponentLabels:[1,3]},
+  {id:2,rasterComponentLabels:[2]}
+ ],
+ rasterLabels:new Uint16Array(24*8)
 };
 for(let y=2;y<=4;y++)for(let x=1;x<=5;x++)groupedScene.rasterLabels[y*24+x]=1;
 for(let y=2;y<=4;y++)for(let x=13;x<=18;x++)groupedScene.rasterLabels[y*24+x]=2;
 const groupedPlan=vm.runInContext('buildColorSchedule(groupedScene)',Object.assign(context,{groupedScene}),{timeout:5000});
 const groupedTimes=new Uint16Array(24*8);
 for(let t=0;t<256;t++)for(let k=groupedPlan.ends[t];k<groupedPlan.ends[t+1];k++)groupedTimes[groupedPlan.order[k]]=t;
-const firstShapeTime=groupedTimes[3*24+4],secondShapeTime=groupedTimes[3*24+14];
-assert.ok(secondShapeTime>firstShapeTime,'The next object must reveal after the previous object');
-assert.ok(groupedTimes[3*24+13]>=secondShapeTime,'The first object must not reveal pixels inside the later object');
+const firstShapeTimes=[],secondShapeTimes=[];
+for(let p=0;p<groupedScene.rasterLabels.length;p++){
+ const label=groupedScene.rasterLabels[p],t=groupedTimes[p];
+ if(label===1||label===3)firstShapeTimes.push(t);
+ if(label===2)secondShapeTimes.push(t);
+}
+assert.ok(Math.max(...firstShapeTimes)<Math.min(...secondShapeTimes),
+ 'Every pixel in the first shape must finish revealing before the next shape starts');
+const groupedTravel=vm.runInContext('strokeTravelPlan(groupedScene.lines)',context,{timeout:5000});
+const firstGroupSegments=groupedTravel.segments.filter(segment=>segment.line.shapeId===1);
+const expectedFirstEnd=Math.floor(230*firstGroupSegments.at(-1).end/groupedTravel.end);
+assert.equal(Math.max(...firstShapeTimes),expectedFirstEnd,
+ 'The first shape must finish exactly at the hand path end of its last stroke');
 
 // Without Worker support, preview must use the fast non-blocking linear fallback.
 const fallback = vm.runInContext('colorSchedule(scene)', context, { timeout: 5000 });
