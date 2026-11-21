@@ -65,17 +65,87 @@ function routeStrokes(lines){
  }
  return ordered
 }
+function lineCenter(line){
+ const points=line.points||[];
+ if(!points.length)return [0,0];
+ let x=0,y=0,step=Math.max(1,Math.floor(points.length/24)),count=0;
+ for(let i=0;i<points.length;i+=step){x+=points[i][0];y+=points[i][1];count++}
+ return [x/count,y/count]
+}
+function fallbackShapeGroups(lines,width,height){
+ const groups=[],gap=Math.max(12,Math.min(width,height)*.035);
+ for(let index=0;index<lines.length;index++){
+  const line=lines[index],center=lineCenter(line);
+  let chosen=null,best=Infinity;
+  for(const group of groups){const d=Math.hypot(group.center[0]-center[0],group.center[1]-center[1]);if(d<best){best=d;chosen=group}}
+  if(chosen&&best<=gap){chosen.lineIndices.push(index);const n=chosen.lineIndices.length;chosen.center=[(chosen.center[0]*(n-1)+center[0])/n,(chosen.center[1]*(n-1)+center[1])/n]}
+  else groups.push({id:groups.length+1,lineIndices:[index],center,bounds:null,area:0,source:'path-cluster'})
+ }
+ return groups
+}
 function applyZones(scene){
  const center=scene.motionStyle!=='contour'&&Array.isArray(scene.centerBaseLines)&&scene.centerBaseLines.length>0;
  let source=center?scene.centerBaseLines:scene.baseLines;
  if(scene.motionStyle!=='contour'&&scene.mode==='original')source=principalStrokes(source,scene.src.width,scene.src.height);
- const zones=scene.zones,groups=Array.from({length:zones.length+1},()=>[]);
- for(const line of source){const point=line.points[Math.floor(line.points.length/2)],x=point[0]/scene.src.width,y=point[1]/scene.src.height;
- const idx=zones.findIndex(z=>x>=z.x&&y>=z.y&&x<=z.x+z.w&&y<=z.y+z.h);groups[idx<0?zones.length:idx].push(line)}
- let start=0;scene.lines=groups.flatMap(group=>routeStrokes(group)).map(line=>{
-  const result={...line,start};start+=line.points.length;return result
+ const all=center?scene.centerBaseLines:scene.baseLines;
+ let groups=[];
+ if(scene.shapeSequence!=='strokes'){
+  const stored=center?scene.centerShapeGroups:scene.contourShapeGroups;
+  const available=new Set(source);
+  if(Array.isArray(stored)&&stored.length){
+   for(const shape of stored){
+    const lines=(shape.lineIndices||[]).map(index=>all[index]).filter(line=>line&&available.has(line));
+    lines.forEach(line=>available.delete(line));
+    if(lines.length||shape.area>0)groups.push({...shape,lines});
+   }
+  }
+  if(available.size){
+   const fallback=fallbackShapeGroups([...available],scene.src.width,scene.src.height);
+   for(const item of fallback)groups.push({...item,lines:item.lineIndices.map(index=>[...available][index])});
+  }
+ }else groups=source.map((line,index)=>({id:index+1,lineIndices:[index],lines:[line],bounds:null,area:0,source:'individual-stroke'}));
+ if(!groups.length)groups=fallbackShapeGroups(source,scene.src.width,scene.src.height).map(group=>({...group,lines:group.lineIndices.map(index=>source[index])}));
+ // Explicit user zones override automatic object grouping and are played first in the drawn order.
+ if(Array.isArray(scene.zones)&&scene.zones.length){
+  const remaining=new Set(source),manual=[];
+  for(let z=0;z<scene.zones.length;z++){
+   const zone=scene.zones[z],picked=[];
+   for(const line of source){
+    if(!remaining.has(line))continue;
+    const [x,y]=lineCenter(line),nx=x/scene.src.width,ny=y/scene.src.height;
+    if(nx>=zone.x&&ny>=zone.y&&nx<=zone.x+zone.w&&ny<=zone.y+zone.h){picked.push(line);remaining.delete(line)}
+   }
+   if(picked.length)manual.push({id:'zone-'+(z+1),lines:picked,bounds:{x:zone.x*scene.src.width,y:zone.y*scene.src.height,width:zone.w*scene.src.width,height:zone.h*scene.src.height},area:0,source:'user-zone'});
+  }
+  const rest=[];
+  for(const shape of groups){
+   const lines=(shape.lines||[]).filter(line=>remaining.has(line));
+   if(lines.length)rest.push({...shape,lines});
+  }
+  const assigned=new Set(rest.flatMap(shape=>shape.lines));
+  for(const line of remaining)if(!assigned.has(line))rest.push({id:'remaining-'+rest.length,lines:[line],bounds:null,area:0,source:'remaining-stroke'});
+  groups=[...manual,...rest];
+ }
+ let start=0;
+ scene.shapeGroups=[];
+ scene.lines=[];
+ groups.forEach((shape,index)=>{
+  const routed=routeStrokes(shape.lines||[]);
+  const pathStart=start;
+  for(const line of routed){
+   const result={...line,start,shapeId:index+1};
+   scene.lines.push(result);start+=line.points.length;
+  }
+  let travelLength=0;
+  for(const line of routed)for(let i=1;i<line.points.length;i++)travelLength+=Math.hypot(line.points[i][0]-line.points[i-1][0],line.points[i][1]-line.points[i-1][1]);
+  scene.shapeGroups.push({
+   id:index+1,name:shape.name||('شكل '+(index+1)),bounds:shape.bounds||null,
+   area:shape.area||0,pathCount:routed.length,pathStart,pathEnd:start,
+   travelLength,source:shape.source||'detected-component'
+  });
  });
- scene.length=start;scene.usingCenterline=center
+ scene.length=start;scene.usingCenterline=center;
+ scene.shapeMetrics={...(scene.shapeMetrics||{}),sequence:scene.shapeSequence||'smart',orderedShapes:scene.shapeGroups.length,drawnShapes:scene.shapeGroups.filter(group=>group.pathCount>0).length};
 }
 
 // Map each source pixel to a reveal time. Interior pixels follow their
@@ -116,7 +186,9 @@ function requestColorSchedule(scene){
  if(!worker){schedules.set(lines,{w:width,h:height,plan:linearColorSchedule(scene)});return}
  const id=++scheduleJobId;scheduleQueued.add(lines);scheduleJobs.set(id,{scene,lines,width,height});
  try{
-  worker.postMessage({id,width,height,length:scene.length,lines:lines.map(line=>({start:line.start,points:line.points}))});
+  const rasterLabels=scene.rasterLabels?.length===width*height?scene.rasterLabels.slice():null;
+  const payload={id,width,height,length:scene.length,lines:lines.map(line=>({start:line.start,points:line.points})),rasterLabels};
+  worker.postMessage(payload,rasterLabels?[rasterLabels.buffer]:[]);
  }catch{
   scheduleJobs.delete(id);scheduleQueued.delete(lines);
   schedules.set(lines,{w:width,h:height,plan:linearColorSchedule(scene)});
@@ -130,19 +202,46 @@ function colorSchedule(scene){
 function buildColorSchedule(scene){
  const w=scene.src.width,h=scene.src.height,n=w*h;
  const times=new Uint8Array(n),seen=new Uint8Array(n),queue=new Uint32Array(n);
+ const labels=scene.rasterLabels?.length===n?scene.rasterLabels:null;
+ let hasLabels=!!labels;
+ if(hasLabels){let foreground=0;for(let p=0;p<n;p++)if(labels[p])foreground++;hasLabels=foreground>0}
  let head=0,tail=0;
  const travel=strokeTravelPlan(scene.lines);
- for(const segment of travel.segments)for(let j=0;j<segment.line.points.length;j++){
-  const point=segment.line.points[j],x=Math.min(w-1,Math.max(0,Math.round(point[0]))),y=Math.min(h-1,Math.max(0,Math.round(point[1]))),p=y*w+x;
-  if(!seen[p]){seen[p]=1;times[p]=strokeRevealTime(segment,j,travel.end);queue[tail++]=p}
+ function nearestLabelPixel(x,y){
+  const direct=y*w+x;if(!hasLabels||labels[direct])return direct;
+  let best=-1,bestD=Infinity;
+  for(let radius=1;radius<=3;radius++)for(let dy=-radius;dy<=radius;dy++)for(let dx=-radius;dx<=radius;dx++){
+   if(Math.max(Math.abs(dx),Math.abs(dy))!==radius)continue;
+   const nx=x+dx,ny=y+dy;if(nx<0||nx>=w||ny<0||ny>=h)continue;
+   const p=ny*w+nx;if(!labels[p])continue;
+   const d=dx*dx+dy*dy;if(d<bestD){best=p;bestD=d}
+  }
+  return best
  }
- if(!tail){for(let p=0;p<n;p++)times[p]=Math.floor(255*p/n)}
+ for(const segment of travel.segments)for(let j=0;j<segment.line.points.length;j++){
+  const point=segment.line.points[j],x=Math.min(w-1,Math.max(0,Math.round(point[0]))),y=Math.min(h-1,Math.max(0,Math.round(point[1]))),p=nearestLabelPixel(x,y);
+  if(p<0)continue;
+  const value=strokeRevealTime(segment,j,travel.end);
+  if(!seen[p]){seen[p]=1;times[p]=value;queue[tail++]=p}
+  else if(value<times[p])times[p]=value
+ }
+ if(!tail&&!hasLabels){for(let p=0;p<n;p++)times[p]=Math.floor(255*p/n)}
  while(head<tail){
-  const p=queue[head++],x=p%w;
+  const p=queue[head++],x=p%w,label=hasLabels?labels[p]:0;
   for(const k of [x>0?p-1:-1,x+1<w?p+1:-1,p-w,p+w]){
    if(k<0||k>=n||seen[k])continue;
-   seen[k]=1;times[k]=Math.min(255,times[p]+1);queue[tail++]=k;
+   if(hasLabels&&(!label||labels[k]!==label))continue;
+   seen[k]=1;times[k]=Math.min(230,times[p]+1);queue[tail++]=k;
   }
+ }
+ if(hasLabels){
+  for(let p=0;p<n;p++){
+   if(labels[p]&&!seen[p])times[p]=230;
+   else if(!labels[p])times[p]=255;
+  }
+ }else if(tail){
+  // Legacy full-canvas propagation remains available for photos or low-contrast images.
+  for(let p=0;p<n;p++)if(!seen[p])times[p]=255;
  }
  const ends=new Uint32Array(257);
  for(const t of times)ends[t+1]++;
