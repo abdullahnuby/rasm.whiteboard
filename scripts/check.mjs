@@ -20,7 +20,7 @@ assert.ok(html.includes('id="shapeSequence"'), 'Shape-level sequencing control m
 assert.ok(html.includes('id="elementDirection"'), 'Element direction selector must be available');
 assert.ok(html.includes('value="rtl">من اليمين إلى الشمال'), 'Arabic default direction must be RTL');
 assert.ok(html.includes('value="ltr">من الشمال إلى اليمين'), 'LTR sequence must be selectable');
-assert.ok(html.includes('value="smart">تجميع ذكي'), 'Smart shape sequence must be the default');
+assert.ok(html.includes('value="smart">عنصر كامل ثم التالي'), 'Element-first sequence must be the default');
 assert.ok(html.indexOf('motion.js') < html.indexOf('shape-engine.js'), 'motion.js must load before the shape engine');
 assert.ok(html.indexOf('shape-engine.js') < html.indexOf('engine.js'), 'shape engine must load before image engine');
 assert.ok(html.indexOf('engine.js') < html.indexOf('app.js'), 'engine.js must load before app.js');
