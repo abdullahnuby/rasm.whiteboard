@@ -61,6 +61,7 @@ for(let y=2;y<=4;y++)for(let x=13;x<=18;x++)groupedScene.rasterLabels[y*24+x]=2;
 const groupedPlan=vm.runInContext('buildColorSchedule(groupedScene)',Object.assign(context,{groupedScene}),{timeout:5000});
 const groupedTimes=new Uint16Array(24*8);
 for(let t=0;t<256;t++)for(let k=groupedPlan.ends[t];k<groupedPlan.ends[t+1];k++)groupedTimes[groupedPlan.order[k]]=t;
+const groupedTravel=vm.runInContext('strokeTravelPlan(groupedScene.lines)',context,{timeout:5000});
 const firstShapeTimes=[],secondShapeTimes=[];
 for(let p=0;p<groupedScene.rasterLabels.length;p++){
  const label=groupedScene.rasterLabels[p],t=groupedTimes[p];
@@ -70,12 +71,12 @@ for(let p=0;p<groupedScene.rasterLabels.length;p++){
 console.log('shape reveal debug', {
  first:[Math.min(...firstShapeTimes),Math.max(...firstShapeTimes)],
  second:[Math.min(...secondShapeTimes),Math.max(...secondShapeTimes)],
- segments:groupedTravel.segments?.map(segment=>({shapeId:segment.line.shapeId,begin:segment.begin,end:segment.end})),
+ segments:groupedTravel.segments.map(segment=>({shapeId:segment.line.shapeId,begin:segment.begin,end:segment.end})),
  groupLabels:groupedScene.shapeGroups
 });
 assert.ok(Math.max(...firstShapeTimes)<Math.min(...secondShapeTimes),
  'Every pixel in the first shape must finish revealing before the next shape starts');
-const groupedTravel=vm.runInContext('strokeTravelPlan(groupedScene.lines)',context,{timeout:5000});
+
 const firstGroupSegments=groupedTravel.segments.filter(segment=>segment.line.shapeId===1);
 const expectedFirstEnd=Math.floor(230*firstGroupSegments.at(-1).end/groupedTravel.end);
 assert.equal(Math.max(...firstShapeTimes),expectedFirstEnd,
