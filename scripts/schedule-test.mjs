@@ -68,12 +68,6 @@ for(let p=0;p<groupedScene.rasterLabels.length;p++){
  if(label===1||label===3)firstShapeTimes.push(t);
  if(label===2)secondShapeTimes.push(t);
 }
-console.log('shape reveal debug', {
- first:[Math.min(...firstShapeTimes),Math.max(...firstShapeTimes)],
- second:[Math.min(...secondShapeTimes),Math.max(...secondShapeTimes)],
- segments:groupedTravel.segments.map(segment=>({shapeId:segment.line.shapeId,begin:segment.begin,end:segment.end})),
- groupLabels:groupedScene.shapeGroups
-});
 assert.ok(Math.max(...firstShapeTimes)<Math.min(...secondShapeTimes),
  'Every pixel in the first shape must finish revealing before the next shape starts');
 
