@@ -1,9 +1,9 @@
 'use strict';
 importScripts('motion.js');
 self.onmessage = event => {
-  const { id, width, height, length, lines } = event.data || {};
+  const { id, width, height, length, lines, rasterLabels } = event.data || {};
   try {
-    const scene = { src: { width, height }, length, lines };
+    const scene = { src: { width, height }, length, lines, rasterLabels };
     const plan = self.buildColorSchedule(scene);
     self.postMessage({ id, plan }, [plan.order.buffer, plan.ends.buffer]);
   } catch (error) {
