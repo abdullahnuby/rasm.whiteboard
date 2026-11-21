@@ -406,9 +406,9 @@
   function makeScene(name, source, result, handHint) {
     const defaults = { speed: 0.2, mode: 'original', tone: 4, sourceHand: 'auto', handSize: 100,
       weight: 1.4, side: '1', hold: 18, paper: '#ffffff', transition: 'cut', elementDirection: 'rtl' };
-    const pixels = source.pixels?.length === source.width * source.height * 4
-      ? source.pixels
-      : source.src.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, source.width, source.height).data;
+    // Async image analysis transfers this pixel buffer to the Worker. Do not
+    // read the same full-resolution canvas back onto the UI thread afterward.
+    const pixels = source.pixels?.length === source.width * source.height * 4 ? source.pixels : null;
     const engineAnalysisV2 = result.engineAnalysisV2 ||
       (pixels ? root.RasmWhiteboardCore.analyzeRaster(pixels, source.width, source.height) : null);
     if (!engineAnalysisV2) throw new Error('Engine worker did not return raster segmentation.');
