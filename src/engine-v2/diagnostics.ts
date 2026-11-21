@@ -27,7 +27,7 @@ export function createEngineReport(
     elements: plan.elements.map(element => ({
       id: element.id, orderIndex: element.orderIndex, componentIds: element.componentIds.slice(),
       bounds: { ...element.bounds }, strokeCount: element.strokes.length,
-      strokeSources: element.strokes.map(stroke => stroke.source),
+      strokeSources: element.strokes.map(stroke => stroke.source ?? "orphan"),
       tracedComponentIds: element.diagnostics.tracedComponentIds.slice(),
       warnings: element.diagnostics.warnings.slice(),
       startDistance: element.startDistance, endDistance: element.endDistance
