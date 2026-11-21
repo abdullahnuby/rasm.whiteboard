@@ -26,6 +26,10 @@ assert.ok(projectSource.includes('handPaceVersion'), 'New slow drawing pace must
 
 assert.ok(html.includes('id="shapeSequence"'), 'Shape-level sequencing control must be available');
 assert.ok(html.includes('id="elementDirection"'), 'Element direction selector must be available');
+const shapeEngineSource = await readFile('dist/shape-engine.js', 'utf8');
+assert.ok(shapeEngineSource.includes('encloses(A,B)||encloses(B,A)'), 'Enclosed illustration content must group with its outer element');
+const motionSource = await readFile('dist/motion.js', 'utf8');
+assert.ok(motionSource.includes('for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)'), 'Raster reveal connectivity must match 8-connected segmentation');
 assert.ok(html.includes('value="rtl">من اليمين إلى الشمال'), 'Arabic default direction must be RTL');
 assert.ok(html.includes('value="ltr">من الشمال إلى اليمين'), 'LTR sequence must be selectable');
 assert.ok(html.includes('value="smart">عنصر كامل ثم التالي'), 'Element-first sequence must be the default');
