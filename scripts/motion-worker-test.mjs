@@ -24,4 +24,41 @@ assert.equal(response.plan.ends[256], 16);
 assert.equal(response.plan.order.length, 16);
 assert.equal(new Set(Array.from(response.plan.order)).size, 16);
 for (let index = 0; index < 16; index++) assert.ok(response.plan.order.includes(index));
+const width = 40, height = 16, labels = new Uint16Array(width * height);
+for (let y = 3; y <= 9; y++) for (let x = 2; x <= 9; x++) labels[y * width + x] = 1;
+for (let y = 3; y <= 9; y++) for (let x = 24; x <= 32; x++) labels[y * width + x] = 2;
+const elementLines = [
+  { start: 0, shapeId: 1, points: [[3, 6], [8, 6]] },
+  { start: 2, shapeId: 2, points: [[25, 6], [31, 6]] }
+];
+response = null;
+context.onmessage({ data: {
+  id: 8, width, height, length: 4, lines: elementLines,
+  rasterLabels: labels,
+  shapeSequence: 'smart',
+  shapeGroups: [
+    { id: 1, rasterComponentLabels: [1] },
+    { id: 2, rasterComponentLabels: [2] }
+  ]
+} });
+assert.equal(response.id, 8);
+assert.equal(response.error, undefined);
+const pixelTimes = new Uint16Array(width * height);
+for (let t = 0; t < 256; t++) {
+  for (let i = response.plan.ends[t]; i < response.plan.ends[t + 1]; i++) pixelTimes[response.plan.order[i]] = t;
+}
+const firstPixels = [], secondPixels = [];
+for (let p = 0; p < labels.length; p++) {
+  if (labels[p] === 1) firstPixels.push(pixelTimes[p]);
+  if (labels[p] === 2) secondPixels.push(pixelTimes[p]);
+}
+assert.ok(Math.max(...firstPixels) < Math.min(...secondPixels),
+  'The worker must finish revealing element 1 before beginning element 2');
+const physical = vm.runInContext('strokeTravelPlan(elementLines)', context);
+const firstSegment = physical.segments[0], secondSegment = physical.segments[1];
+assert.equal(Math.max(...firstPixels), Math.floor(255 * firstSegment.end / physical.end),
+  'Element 1 final pixels must reveal when its final hand path completes');
+assert.equal(Math.min(...secondPixels), Math.floor(255 * secondSegment.draw / physical.end),
+  'Element 2 must start revealing only when the hand arrives at its first path');
+
 console.log('RASM motion worker tests passed.');

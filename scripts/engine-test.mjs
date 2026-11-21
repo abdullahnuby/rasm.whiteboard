@@ -4,6 +4,7 @@ import vm from 'node:vm';
 
 const source = await readFile('dist/engine.js', 'utf8');
 const context = vm.createContext({ Uint8Array, Uint8ClampedArray, Uint16Array, Uint32Array, Int16Array, Int32Array, Float32Array, Map, Math, Number, TypeError });
+vm.runInContext(await readFile('dist/shape-engine.js','utf8'), context);
 vm.runInContext(source, context);
 const engine = context.RasmImageEngine;
 assert.ok(engine, 'Image engine should be exported');
@@ -55,6 +56,14 @@ assert.ok(Array.isArray(horizontalResult.centerLines) && horizontalResult.center
   'A thick marker stroke should produce a centerline writing path');
 assert.ok(horizontalResult.centerLength < horizontalResult.length,
   'Centerline motion should use fewer points than tracing both stroke borders');
+assert.ok(horizontalResult.rasterLabels instanceof Uint16Array,
+  'Image analysis should return compact per-pixel shape ownership labels');
+assert.ok(horizontalResult.rasterLabels.length === 64 * 48,
+  'Shape ownership map must match the analysed image dimensions');
+assert.ok(horizontalResult.centerShapeGroups.length > 0,
+  'Centerline paths must be grouped into drawable shapes');
+assert.ok(horizontalResult.shapeMetrics.shapes > 0,
+  'Shape segmentation metrics must be returned');
 
 // Exercise image-edge handling: disconnected pixels at opposite ends must
 // never be joined by accidental linear-index wraparound.

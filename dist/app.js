@@ -3,7 +3,7 @@ const el=id=>document.getElementById(id), board=el('board'), ctx=board.getContex
 const surface=(w,h)=>Object.assign(document.createElement('canvas'),{width:w,height:h});
 let scenes=[], selected=0, time=0, running=false, recording=false, start=0, frame=0, tone=0, demo=true, loading=false, lastUrl='', activeImport=null;
 let timelineScale=40, audioTimeline=null, timelineDrag=null, exportSession=null, lastExportRevision=null;
-const defaults={speed:.5,motionStyle:'smart',mode:'original',tone:4,sourceHand:'auto',handSize:100,weight:1.4,side:'1',hold:18,paper:'#ffffff',transition:'cut'};
+const defaults={speed:.2,handPaceVersion:6,motionStyle:'smart',shapeSequence:'smart',elementDirection:'rtl',mode:'original',tone:4,sourceHand:'auto',handSize:100,weight:1.4,side:'1',hold:18,paper:'#ffffff',transition:'cut'};
 const colors=['#e6af89','#986642',null], total=()=>RasmTimeline.totalSeconds(scenes), offset=i=>RasmTimeline.layout(scenes,1)[i]?.start||0;
 function setOperationStatus(label,done=0,total=1){
  const panel=el('operationStatus');if(!panel)return;
@@ -57,7 +57,7 @@ let cache={};
 function render(t){
  const W=board.width,H=board.height;ctx.fillStyle='white';ctx.fillRect(0,0,W,H);
  if(!scenes.length)return;let i=0,local=t;while(i<scenes.length-1 && local>=sceneSeconds(scenes[i]))local-=sceneSeconds(scenes[i++]);
- const s=scenes[i],mode=s.mode,duration=sceneSeconds(s),drawTime=duration*(1-s.hold/100),frac=Math.min(1,local/drawTime),motion=strokeProgress(s,mode==='original'?Math.min(1,frac/.86):frac),target=motion.target;
+ const s=scenes[i],mode=s.mode,duration=sceneSeconds(s),drawTime=duration*(1-s.hold/100),frac=Math.min(1,local/drawTime),motion=strokeProgress(s,frac),target=motion.target;
  ctx.fillStyle=s.paper;ctx.fillRect(0,0,W,H);
  if(cache.s!==s || cache.mode!==mode || cache.weight!==s.weight || target<cache.t){let lay=surface(s.src.width,s.src.height);cache={s,mode,weight:s.weight,lay,c:lay.getContext('2d'),idx:0,t:0}}
  let tip;
@@ -83,15 +83,14 @@ function render(t){
   }
  }
  if(original&&cache.pixels){
-  let reveal=frac/.96;
-  if(s.length)reveal=frac<.86?target/s.length*230/256:(230+(frac-.86)/.10*26)/256;
-  if(revealPixels(cache.pixels,Math.min(1,reveal)))cache.c.putImageData(cache.pixels.image,0,0)
+  const reveal=Math.max(0,Math.min(1,Number.isFinite(motion.progress)?motion.progress:frac));
+  if(revealPixels(cache.pixels,reveal))cache.c.putImageData(cache.pixels.image,0,0)
  }
  cache.t=target;const sc=Math.min(W/s.src.width,H/s.src.height)*.96,ox=(W-sc*s.src.width)/2,oy=(H-sc*s.src.height)/2;
  ctx.save();ctx.translate(ox,oy);ctx.scale(sc,sc);ctx.drawImage(cache.lay,0,0);
- if(original&&!cache.pixels){const reveal=Math.min(1,frac/.96);ctx.save();ctx.beginPath();ctx.rect(0,0,s.src.width,s.src.height*reveal);ctx.clip();ctx.drawImage(s.src,0,0);ctx.restore()}
- tip=frac<.86||mode!=='original'?motion.tip||null:null;
- if(!tip && original && !s.length && frac<.96 && cache.pixels){
+ if(original&&!cache.pixels){const reveal=Math.min(1,frac);ctx.save();ctx.beginPath();ctx.rect(0,0,s.src.width,s.src.height*reveal);ctx.clip();ctx.drawImage(s.src,0,0);ctx.restore()}
+ tip=frac<1||mode!=='original'?motion.tip||null:null;
+ if(!tip && original && !s.length && frac<1 && cache.pixels){
   const pixels=cache.pixels;
   const pixel=pixels.linear?Math.max(0,pixels.count-1):pixels.order[Math.max(0,pixels.count-1)];
   tip=[pixel%s.src.width,Math.floor(pixel/s.src.width)]
@@ -192,7 +191,7 @@ el('zoomOut').onclick=()=>{timelineScale=Math.max(.5,timelineScale-6);renderTime
 el('zoomFit').onclick=()=>{const seconds=Math.max(total(),audioTimeline?.duration||0);timelineScale=Math.max(.5,Math.min(80,(el('timelineScroll').clientWidth-50)/Math.max(1,seconds)));renderTimeline()};
 
 function pick(i){stop();selected=i;time=offset(i)+sceneSeconds(scenes[i])*.75;refresh();const clip=el('timelineVideoTrack').querySelector('[data-index="'+i+'"]');clip?.scrollIntoView({block:'nearest',inline:'nearest'})}
-function refresh(){if(typeof refreshGuide==='function')refreshGuide();const current=scenes[selected]||defaults;el('speed').value=current.speed||1;el('motionStyle').value=current.motionStyle||'smart';el('sceneTime').textContent=scenes.length?'مدة المشهد بعد ضبط السرعة: '+sceneSeconds(current).toFixed(1)+' ث':'';el('sourceHand').value=current.sourceHand;el('handSize').value=current.handSize;el('sizeValue').value=current.handSize+'%';el('weight').value=current.weight;el('zoneEdit').disabled=!scenes.length;el('handState').textContent=current.sourceHand==='present'?'تُستخدم اليد الظاهرة في الصورة.':current.handHint&&current.sourceHand==='auto'?'إذا ظهرت يد في الصورة، اختر «الصورة تتضمّن يدًا».':current.handHint&&current.sourceHand==='detect'?'أُخفيت اليد بناءً على الفحص.':'';el('style').value=current.mode;el('side').value=current.side;el('paper').value=current.paper;el('hold').value=current.hold;el('holdValue').value=current.hold+'%';el('transition').value=current.transition;el('sceneName').value=current.name||'';document.querySelectorAll('#hands button').forEach((b,i)=>b.classList.toggle('active',Number(b.dataset.tone)===current.tone));range.max=total();el('duration').value=scenes.length?sceneSeconds(scenes[selected]).toFixed(1):'6';el('count').textContent=scenes.length+' مشاهد';el('cards').replaceChildren();scenes.forEach((s,i)=>{const b=document.createElement('button');b.className='card'+(i===selected?' active':'');const img=new Image();img.src=s.thumb;const caption=document.createElement('span');caption.textContent=(i+1)+' · '+s.name;b.append(img,caption);b.onclick=()=>pick(i);el('cards').append(b)});
+function refresh(){if(typeof refreshGuide==='function')refreshGuide();const current=scenes[selected]||defaults;el('speed').value=current.speed||1;el('motionStyle').value=current.motionStyle||'smart';el('shapeSequence').value=current.shapeSequence||'smart';el('elementDirection').value=current.elementDirection||'rtl';el('shapeStatus').textContent=current.shapeGroups?.length?'تم تقسيم الصورة إلى '+current.shapeGroups.length+' عنصر · '+(current.shapeMetrics?.backend==='opencv-5'?'OpenCV':'محرك المكونات'):'سيتم تقسيم الصورة إلى عناصر بعد التحليل';el('sceneTime').textContent=scenes.length?'مدة المشهد بعد ضبط السرعة: '+sceneSeconds(current).toFixed(1)+' ث':'';el('sourceHand').value=current.sourceHand;el('handSize').value=current.handSize;el('sizeValue').value=current.handSize+'%';el('weight').value=current.weight;el('zoneEdit').disabled=!scenes.length;el('handState').textContent=current.sourceHand==='present'?'تُستخدم اليد الظاهرة في الصورة.':current.handHint&&current.sourceHand==='auto'?'إذا ظهرت يد في الصورة، اختر «الصورة تتضمّن يدًا».':current.handHint&&current.sourceHand==='detect'?'أُخفيت اليد بناءً على الفحص.':'';el('style').value=current.mode;el('side').value=current.side;el('paper').value=current.paper;el('hold').value=current.hold;el('holdValue').value=current.hold+'%';el('transition').value=current.transition;el('sceneName').value=current.name||'';document.querySelectorAll('#hands button').forEach((b,i)=>b.classList.toggle('active',Number(b.dataset.tone)===current.tone));range.max=total();el('duration').value=scenes.length?sceneSeconds(scenes[selected]).toFixed(1):'6';el('count').textContent=scenes.length+' مشاهد';el('cards').replaceChildren();scenes.forEach((s,i)=>{const b=document.createElement('button');b.className='card'+(i===selected?' active':'');const img=new Image();img.src=s.thumb;const caption=document.createElement('span');caption.textContent=(i+1)+' · '+s.name;b.append(img,caption);b.onclick=()=>pick(i);el('cards').append(b)});
  el('earlier').disabled=selected<=0;el('later').disabled=selected>=scenes.length-1;for(const id of ['export','play','remove','duration','seek'])el(id).disabled=!scenes.length;
  if(!scenes.length){el('clock').textContent='0:00 / 0:00';el('meta').textContent='';range.value=0}renderTimeline();render(time);if(typeof refreshGuide==='function')refreshGuide()}
 function setBoardResolution(longEdge){const r=+el('ratio').value;const width=r>=1?longEdge:Math.round(longEdge*r/2)*2;const height=r>=1?Math.round(longEdge/r/2)*2:longEdge;if(board.width!==width||board.height!==height){board.width=width;board.height=height}render(time)}
@@ -349,6 +348,16 @@ function updateSpeed(all){
  pick(selected);queueSave()
 }
 el('speed').onchange=()=>updateSpeed(false);
+el('shapeSequence').onchange=()=>{
+ if(!scenes[selected])return;
+ scenes[selected].shapeSequence=el('shapeSequence').value;
+ applyZones(scenes[selected]);cache={};refresh();queueSave();
+};
+el('elementDirection').onchange=()=>{
+ if(!scenes[selected])return;
+ scenes[selected].elementDirection=el('elementDirection').value;
+ applyZones(scenes[selected]);cache={};refresh();queueSave();
+};
 el('allSpeed').onclick=()=>updateSpeed(true);
 
 function formatClock(t){const seconds=Math.floor(t);return Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0')}

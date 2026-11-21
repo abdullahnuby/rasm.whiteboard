@@ -25,16 +25,17 @@ assert.equal(response.plan.order.length, 16);
 assert.equal(new Set(Array.from(response.plan.order)).size, 16);
 for (let index = 0; index < 16; index++) assert.ok(response.plan.order.includes(index));
 const width = 40, height = 16, labels = new Uint16Array(width * height);
-for (let y = 3; y <= 9; y++) for (let x = 2; x <= 9; x++) labels[y * width + x] = 1;
-for (let offset = 1; offset <= 3; offset++) labels[(9 + offset) * width + (9 + offset)] = 1; // diagonal-only tail
+for (let y = 3; y <= 12; y++) for (let x = 2; x <= 16; x++) labels[y * width + x] = 1;
+for (let offset = 1; offset <= 3; offset++) labels[(12 + offset) * width + (16 + offset)] = 1; // diagonal-only tail
 for (let y = 3; y <= 9; y++) for (let x = 24; x <= 32; x++) labels[y * width + x] = 2;
 const elementLines = [
-  { start: 0, shapeId: 1, points: [[3, 6], [8, 6]] },
-  { start: 2, shapeId: 2, points: [[25, 6], [31, 6]] }
+  { start: 0, shapeId: 1, points: [[3, 6], [8, 6], [16, 12]] },
+  { start: 3, shapeId: 1, points: [[14, 10], [16, 10]] },
+  { start: 5, shapeId: 2, points: [[25, 6], [31, 6]] }
 ];
 response = null;
 context.onmessage({ data: {
-  id: 8, width, height, length: 4, lines: elementLines,
+  id: 8, width, height, length: 7, lines: elementLines,
   rasterLabels: labels,
   shapeSequence: 'smart',
   shapeGroups: [
@@ -56,17 +57,10 @@ for (let p = 0; p < labels.length; p++) {
 assert.ok(Math.max(...firstPixels) < Math.min(...secondPixels),
   'The worker must finish revealing element 1 before beginning element 2');
 context.elementLines = elementLines;
-console.log('diagonal reveal diagnostics', {
- diagonal:pixelTimes[12*width+12],
- firstMin:Math.min(...firstPixels),firstMax:Math.max(...firstPixels),
- firstTail:pixelTimes[10*width+10],
- segmentEnd:response.plan.ends[256],
- labels:[labels[10*width+10],labels[11*width+11],labels[12*width+12]]
-});
-assert.ok(pixelTimes[12 * width + 12] < Math.max(...firstPixels),
+assert.ok(pixelTimes[15 * width + 19] < Math.max(...firstPixels),
   'Diagonally connected pixels must reveal during their owning element, not as late leftovers');
 const physical = vm.runInContext('strokeTravelPlan(elementLines)', context);
-const firstSegment = physical.segments[0], secondSegment = physical.segments[1];
+const firstSegment = physical.segments[1], secondSegment = physical.segments[2];
 assert.equal(Math.max(...firstPixels), Math.floor(255 * firstSegment.end / physical.end),
   'Element 1 final pixels must reveal when its final hand path completes');
 assert.equal(Math.min(...secondPixels), Math.floor(255 * secondSegment.draw / physical.end),

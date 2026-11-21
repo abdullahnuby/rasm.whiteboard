@@ -258,7 +258,8 @@
         if (i) distance += Math.hypot(point[0] - points[i - 1][0], point[1] - points[i - 1][1]);
       }
       if (distance < 3.5) { discarded++; return; }
-      let smooth = resamplePolyline(simplifyPolyline(points, .8), 1.5);
+      const simplified = root.RasmShapeEngine?.simplifyPolyline(points, .8, root.paper) || simplifyPolyline(points, .8);
+      let smooth = resamplePolyline(simplified, 1.5);
       const first = smooth[0], last = smooth[smooth.length - 1];
       const closed = Math.hypot(first[0] - last[0], first[1] - last[1]) < .01;
       if (!closed) {
@@ -297,7 +298,7 @@
       return line;
     });
     return {
-      lines, length,
+      lines, length, foregroundMask: foreground.mask,
       metrics: {
         available: lines.length > 0, paths: lines.length, discardedPaths: discarded,
         foregroundDensity: foreground.density, thinningIterations: thinned.iterations
@@ -356,7 +357,8 @@
         if (i) distance += Math.hypot(point[0] - points[i - 1][0], point[1] - points[i - 1][1]);
       }
       if (distance < minLength) { discarded++; return; }
-      const smooth = resamplePolyline(simplifyPolyline(points, tolerance), 1.25), count = points.length;
+      const simplified = root.RasmShapeEngine?.simplifyPolyline(points, tolerance, root.paper) || simplifyPolyline(points, tolerance);
+      const smooth = resamplePolyline(simplified, 1.25), count = points.length;
       paths.push({
         points: smooth,
         color: 'rgb(' + [red, green, blue].map(v => Math.round(v / count * 0.82)).join(',') + ')',
@@ -385,9 +387,17 @@
       return line;
     });
     const centerline = extractCenterlinePaths(data, width, height);
+    const shapeData = root.RasmShapeEngine?.analyze(
+      centerline.foregroundMask, width, height,
+      centerline.lines, lines, options.cv || root.cv, options.shapeOptions || {}
+    ) || null;
     return {
       lines, length,
       centerLines: centerline.lines, centerLength: centerline.length, centerMetrics: centerline.metrics,
+      rasterLabels: shapeData?.rasterLabels || null,
+      centerShapeGroups: shapeData?.centerGroups || [],
+      contourShapeGroups: shapeData?.contourGroups || [],
+      shapeMetrics: shapeData?.metrics || {backend:'legacy-fallback',shapes:0},
       metrics: { width, height, edgePixels: linked.count, paths: lines.length, discardedPaths: discarded,
         highThreshold: Math.round(thresholds.high), lowThreshold: Math.round(thresholds.low) }
     };
@@ -404,11 +414,22 @@
     return { src, width, height, pixels: context.getImageData(0, 0, width, height).data };
   }
   function makeScene(name, source, result, handHint) {
-    const defaults = { speed: 0.5, mode: 'original', tone: 4, sourceHand: 'auto', handSize: 100,
+    const defaults = { speed: 0.2, handPaceVersion: 6, mode: 'original', tone: 4, sourceHand: 'auto', handSize: 100,
       weight: 1.4, side: '1', hold: 18, paper: '#ffffff', transition: 'cut' };
-    return { name, src: source.src, baseLines: result.lines, centerBaseLines: result.centerLines || [], centerMetrics: result.centerMetrics || null, motionStyle: 'smart', zones: [], handHint: !!handHint,
-      thumb: source.src.toDataURL('image/jpeg', 0.65), lines: result.centerLines && result.centerLines.length ? result.centerLines : result.lines, length: result.centerLines && result.centerLines.length ? result.centerLength : result.length,
-      duration: 10, engineVersion: 4, metrics: result.metrics, ...defaults };
+    return {
+      name, src: source.src,
+      baseLines: result.lines, centerBaseLines: result.centerLines || [],
+      centerMetrics: result.centerMetrics || null,
+      centerShapeGroups: result.centerShapeGroups || [],
+      contourShapeGroups: result.contourShapeGroups || [],
+      rasterLabels: result.rasterLabels || null,
+      shapeMetrics: result.shapeMetrics || {backend:'legacy-fallback',shapes:0},
+      shapeSequence: 'smart', motionStyle: 'smart', zones: [], handHint: !!handHint,
+      thumb: source.src.toDataURL('image/jpeg', 0.65),
+      lines: result.centerLines && result.centerLines.length ? result.centerLines : result.lines,
+      length: result.centerLines && result.centerLines.length ? result.centerLength : result.length,
+      duration: 10, engineVersion: 5, metrics: result.metrics, ...defaults
+    };
   }
 
   let worker = null, requestId = 0;
@@ -435,13 +456,13 @@
   function analyze(img, name) {
     const source = prepareSource(img);
     const handHint = typeof root.edgeSkinRegion === 'function' ? root.edgeSkinRegion(source.pixels, source.width, source.height) : false;
-    return makeScene(name, source, extractPaths(source.pixels, source.width, source.height), handHint);
+    return makeScene(name, source, extractPaths(source.pixels, source.width, source.height, {cv:root.cv,paper:root.paper}), handHint);
   }
   async function analyzeAsync(img, name) {
     const source = prepareSource(img);
     const handHint = typeof root.edgeSkinRegion === 'function' ? root.edgeSkinRegion(source.pixels, source.width, source.height) : false;
     const activeWorker = getWorker();
-    if (!activeWorker) return makeScene(name, source, extractPaths(source.pixels, source.width, source.height), handHint);
+    if (!activeWorker) return makeScene(name, source, extractPaths(source.pixels, source.width, source.height, {cv:root.cv,paper:root.paper}), handHint);
     const id = ++requestId;
     let result;
     try {

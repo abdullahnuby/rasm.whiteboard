@@ -180,6 +180,17 @@
 <option value="contour">تفاصيل دقيقة · تتبّع الحدود</option>
 </select>
 </label>
+<label>وحدة الرسم<select id="shapeSequence">
+<option value="smart">عنصر كامل ثم التالي</option>
+<option value="strokes">كل مسار بصورة مستقلة</option>
+</select>
+</label>
+<label>اتجاه ترتيب العناصر<select id="elementDirection">
+<option value="rtl">من اليمين إلى الشمال</option>
+<option value="ltr">من الشمال إلى اليمين</option>
+</select>
+</label>
+<small id="shapeStatus">يتم تقسيم الصورة إلى عناصر مستقلة وترتيبها قبل الرسم.</small>
 <button id="zoneEdit">ترتيب مناطق الرسم</button>
 <details>
 <summary>خيارات المظهر</summary>
@@ -213,7 +224,7 @@
 <option value="1">السرعة الأصلية · 1×</option>
 </select>
 </label>
-<small id="speedHint">إبطاء الرسم يزيد مدة المشهد. يمكنك تعديل مدته من المخطط الزمني.</small>
+<small id="speedHint">السرعة الافتراضية 0.2× لإظهار كل عنصر بهدوء. تقليل السرعة يطيل مدة المشهد تلقائيًا.</small>
 <p id="sceneTime">
 </p>
 <label>فترة الثبات بعد الرسم (%)<input id="hold" type="range" min="0" max="70" value="18">
@@ -341,6 +352,8 @@
 <script src="export.js">
 </script>
 <script src="motion.js">
+</script>
+<script src="shape-engine.js">
 </script>
 <script src="engine.js">
 </script>

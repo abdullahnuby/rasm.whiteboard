@@ -1,42 +1,24 @@
-# مراجعة رَسم Studio 5.1
-المرجع هو نسخة 4.4.0 من الأرشيف rasm.whiteboard-main.zip الذي أرسله المستخدم.
+# RASM Studio 5.2.3 QA Report
 
-## المشاكل التي عولجت
-- خادم التطوير كان يستبعد reliability.js وtimeline.js وexport.js وmotion-worker.js. أصبح يقدّم جميع ملفات dist مع نوع المحتوى الصحيح، ويفهم منفذ --port المستخدم في المعاينة.
-- التصدير كان يعتمد على requestAnimationFrame مع طلبات التقاط يدوية منفصلة. استُبدل المسار الافتراضي بترميز كل إطار بتوقيت صريح، مع انتظار قدرة المرمّز على استقبال الإطار التالي.
-- تمت تهيئة جداول ألوان جميع المشاهد قبل التصدير، مع حد انتظار واستجابة بديلة عند تعطل Worker.
-- أصبح التصدير يتيح الإلغاء وإعادة المحاولة، ويعيد تحرير الواجهة والموارد بعد النجاح أو الفشل.
-- أصبح انتقال اليد محسوبًا بطول المسار الحقيقي، وترتيب الخطوط يعتمد على قرب أطرافها. الرسم الملوّن الهادئ يستخدم المسارات الرئيسية لتخفيف تتبع التفاصيل الصغيرة.
-- أصبحت بداية الاستخدام واضحة، مع أقسام مستقلة للمشهد والتوقيت واليد والتصدير، وتنبيه لاختلاف مدة الصوت والفيديو.
-- تم الحفاظ على محرك استخلاص الصور، والمخطط القابل لتغيير المدة، والمعالجة في Workers، واستعادة المشروعات، والنسخ المستردة من التعديلات المرفوعة.
+## Observations addressed from the 5.2.2 mobile screenshot
+- Closely aligned component bounding boxes could be merged even when the objects were visually separate. This could place a nearby word/object into the same drawable group as a cloud or badge.
+- OpenCV segmentation uses 8-connectivity, while the raster reveal flood fill used only 4-connectivity. Pixels connected only diagonally were left unvisited and assigned the terminal reveal time, causing fragments to appear at the end of an element rather than along its reveal.
 
-## فحوص الكود
-اجتازت اختبارات محركات الصور والحركة وجدولة الألوان، وعمّال المعالجة، والذاكرة والاصطفاف، وتوقيت المشاهد، وربط عناصر الواجهة، وامتدادات التصدير. أُضيف اختبار للمسافات غير المتساوية بين نقاط المسار، واختبار لخدمة جميع موارد الصفحة والوحدات والعمّال والخطوط ومكتبة التصدير عبر HTTP.
+## Fixes
+- Component groups now merge only when a small mark passes the diacritic attachment tests, a component is nested inside an enclosing outline, or masks overlap substantially in both axes.
+- Bounding-box proximity/projection overlap alone no longer merges neighbouring visual elements.
+- Raster reveal now uses 8-neighbour connectivity, matching the connected-component topology used by OpenCV.
+- For a component with no centerline route, the motion engine now uses contour paths from the same raster component. If no contour path exists either, it generates a short sweep within that component's own bounds. This prevents labelled image elements from having no hand movement and being revealed only at the scene end.
+- Nested content inside a cloud/speech bubble/badge is grouped with its enclosing outline; nearby external text and illustrations remain independent elements.
 
-## اختبارات المتصفح والملفات الناتجة
-- استعادة مشروع محفوظ سابقًا، بصوره وتسجيله.
-- تصدير 4 مشاهد مع تسجيل مدته نحو 71.6 ثانية بدقة 1280×720.
-- استيراد 6 صور بأسماء مرقّمة وبترتيب اختيار مختلط، ثم التحقق من ترتيبها الصحيح.
-- مطابقة مدة المشاهد مع التسجيل وتصدير 6 مشاهد بدقة 1920×1080.
-- نتج ملف WebM بفيديو VP8 وصوت Opus، ومدته 71.640 ثانية، مع 1720 إطار فيديو قابلًا للفك.
-- مقارنات بكسلات بين بداية ووسط ونهاية كل مشهد أكدت تغير الصورة داخل المشاهد الستة، بما فيها المشهد الأخير.
-- إلغاء التصدير ثم إعادة المحاولة.
-- اختبار الحفظ وإعادة فتح المشروع تم خلال السيناريوهات السابقة.
-- تشغيل المحرك المتوافق على 6 مشاهد مع التسجيل لمدة 71.6 ثانية بدقة 720p. ملفه يحتوي على VP9 وصوت Opus.
-- فحص الواجهة داخل عرض 390 بكسل على Chromium، مع التحقق من عدم وجود تمدد أفقي للصفحة.
-- تجربة البدء بمشروع جديد والاحتفاظ بالنسخة السابقة، وتجربة المثال المرفق، وتغيير المدة المباشر من لوحة التوقيت.
+## Regression tests
+- Nested visual component inside an enclosing outline groups with that outline.
+- Adjacent external object remains a separate group.
+- Detached small aligned marks still attach to their base.
+- Diagonally connected pixels reveal during the owning element interval, rather than as terminal leftovers.
+- Existing two-element worker test still checks element completion timing and hand arrival.
+- Existing shape segmentation, directional routing, image/schedule workers, reliability, timeline, export, and server resource tests remain in the build.
 
-## حدود التحقق
-الاختبار العملي على Chrome/Linux. صيغة MP4 تعتمد على توفر AVC/AAC في المتصفح. يلزم اختبار Safari/iPhone على جهاز فعلي. صور الاختبار الست رسوم هندسية ملونة مصطنعة لاختبار الحركة والترتيب. لم تُرفق صور مشروع المستخدم النهائي ضمن الأرشيف، لذلك لم يُختبر ذلك المحتوى بعينه.
-
-## مراجعة واجهة 5.1
-- فتح القائمة الجانبية وتعديل مدة المشهد منها والتحقق من تحديث المخطط.
-- الانتقال من القائمة إلى إدارة المشروع والعودة.
-- تغيير عرض مساحة العمل بين 390 و1100 و320 بكسل. تُستخدم لوحة خصائص واحدة، وتُغلق القائمة عند الانتقال إلى الكمبيوتر.
-- عرض القائمة على شاشة 320 بكسل دون تمدد أفقي. عرض محتواها يساوي عرضها، وعرض الصفحة يساوي عرض مساحة العرض.
-- تشغيل التصدير من القائمة الجانبية، والتحقق من إغلاقها وإظهار حالة المعالجة.
-- إضافة زر تنزيل مباشر إلى بطاقة نتيجة التصدير.
-
-- اختبار الاستيراد من القائمة واستبدال المثال بصورة جديدة.
-- التصدير من القائمة بالمحرك الدقيق أنتج 144 إطارًا لفيديو مدته 6 ثوانٍ.
-- توضيح أن الفيديو الناتج يصبح نسخة سابقة بعد تعديل المشروع، لتجنب اعتباره نتيجة التعديلات الجديدة.
+## Validation boundary
+- All tests are synthetic geometric fixtures. The exact user illustration file (.rasm or original image) was not attached, so this does not constitute scene-specific visual acceptance.
+- Final acceptance still requires opening the same project in the new preview and checking the same moment around 00:07. Safari/iPhone playback and export must be checked before production merge.
