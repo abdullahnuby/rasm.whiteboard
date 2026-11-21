@@ -1,3 +1,11 @@
+# 5.2.2 — Exact hand-to-element reveal synchronization and slower default pace
+- Remove the trailing 10% reveal phase that allowed image pixels to continue appearing after the hand had completed its route.
+- Drive original-image reveal directly from the same normalized physical progress used by the hand, without independent .86/.96 timing multipliers.
+- Send each line's shapeId, shape ownership groups, and sequence mode to the motion worker so per-element reveal windows are applied during real playback and export.
+- Test worker-level element scheduling: the final pixel of an element appears when its final hand path completes, and the next element starts only when the hand arrives.
+- Use the full 0–255 reveal range so each element reaches completion at the end of its drawing window.
+- Set new scenes to 0.2× drawing speed. Migrate legacy default 0.5× scenes to 0.2× on import, while preserving explicit speed choices in projects saved with the new pace version.
+
 # 5.2.1 — Element-based sequencing and directional drawing
 - Tighten OpenCV morphological closing to a 3×3 kernel and reduce proximity-based merges so neighbouring components remain separate elements.
 - Attach only small, aligned detached marks such as Arabic dots to a nearby larger component.
