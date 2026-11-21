@@ -3,7 +3,7 @@ const el=id=>document.getElementById(id), board=el('board'), ctx=board.getContex
 const surface=(w,h)=>Object.assign(document.createElement('canvas'),{width:w,height:h});
 let scenes=[], selected=0, time=0, running=false, recording=false, start=0, frame=0, tone=0, demo=true, loading=false, lastUrl='', activeImport=null;
 let timelineScale=40, audioTimeline=null, timelineDrag=null, exportSession=null, lastExportRevision=null;
-const defaults={speed:.5,motionStyle:'smart',shapeSequence:'smart',elementDirection:'rtl',mode:'original',tone:4,sourceHand:'auto',handSize:100,weight:1.4,side:'1',hold:18,paper:'#ffffff',transition:'cut'};
+const defaults={speed:.2,handPaceVersion:6,motionStyle:'smart',shapeSequence:'smart',elementDirection:'rtl',mode:'original',tone:4,sourceHand:'auto',handSize:100,weight:1.4,side:'1',hold:18,paper:'#ffffff',transition:'cut'};
 const colors=['#e6af89','#986642',null], total=()=>RasmTimeline.totalSeconds(scenes), offset=i=>RasmTimeline.layout(scenes,1)[i]?.start||0;
 function setOperationStatus(label,done=0,total=1){
  const panel=el('operationStatus');if(!panel)return;
@@ -57,7 +57,7 @@ let cache={};
 function render(t){
  const W=board.width,H=board.height;ctx.fillStyle='white';ctx.fillRect(0,0,W,H);
  if(!scenes.length)return;let i=0,local=t;while(i<scenes.length-1 && local>=sceneSeconds(scenes[i]))local-=sceneSeconds(scenes[i++]);
- const s=scenes[i],mode=s.mode,duration=sceneSeconds(s),drawTime=duration*(1-s.hold/100),frac=Math.min(1,local/drawTime),motion=strokeProgress(s,mode==='original'?Math.min(1,frac/.86):frac),target=motion.target;
+ const s=scenes[i],mode=s.mode,duration=sceneSeconds(s),drawTime=duration*(1-s.hold/100),frac=Math.min(1,local/drawTime),motion=strokeProgress(s,frac),target=motion.target;
  ctx.fillStyle=s.paper;ctx.fillRect(0,0,W,H);
  if(cache.s!==s || cache.mode!==mode || cache.weight!==s.weight || target<cache.t){let lay=surface(s.src.width,s.src.height);cache={s,mode,weight:s.weight,lay,c:lay.getContext('2d'),idx:0,t:0}}
  let tip;
@@ -83,15 +83,14 @@ function render(t){
   }
  }
  if(original&&cache.pixels){
-  let reveal=frac/.96;
-  if(s.length)reveal=frac<.86?(Number.isFinite(motion.progress)?motion.progress:target/s.length)*230/256:(230+(frac-.86)/.10*26)/256;
-  if(revealPixels(cache.pixels,Math.min(1,reveal)))cache.c.putImageData(cache.pixels.image,0,0)
+  const reveal=Math.max(0,Math.min(1,Number.isFinite(motion.progress)?motion.progress:frac));
+  if(revealPixels(cache.pixels,reveal))cache.c.putImageData(cache.pixels.image,0,0)
  }
  cache.t=target;const sc=Math.min(W/s.src.width,H/s.src.height)*.96,ox=(W-sc*s.src.width)/2,oy=(H-sc*s.src.height)/2;
  ctx.save();ctx.translate(ox,oy);ctx.scale(sc,sc);ctx.drawImage(cache.lay,0,0);
- if(original&&!cache.pixels){const reveal=Math.min(1,frac/.96);ctx.save();ctx.beginPath();ctx.rect(0,0,s.src.width,s.src.height*reveal);ctx.clip();ctx.drawImage(s.src,0,0);ctx.restore()}
- tip=frac<.86||mode!=='original'?motion.tip||null:null;
- if(!tip && original && !s.length && frac<.96 && cache.pixels){
+ if(original&&!cache.pixels){const reveal=Math.min(1,frac);ctx.save();ctx.beginPath();ctx.rect(0,0,s.src.width,s.src.height*reveal);ctx.clip();ctx.drawImage(s.src,0,0);ctx.restore()}
+ tip=frac<1||mode!=='original'?motion.tip||null:null;
+ if(!tip && original && !s.length && frac<1 && cache.pixels){
   const pixels=cache.pixels;
   const pixel=pixels.linear?Math.max(0,pixels.count-1):pixels.order[Math.max(0,pixels.count-1)];
   tip=[pixel%s.src.width,Math.floor(pixel/s.src.width)]
