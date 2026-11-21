@@ -128,6 +128,31 @@ assert.equal(grouped.shapeGroups[0].id,1);
 
 assert.deepEqual(Array.from(grouped.shapeGroups[0].rasterComponentLabels),[2]);
 assert.deepEqual(Array.from(grouped.shapeGroups[1].rasterComponentLabels),[1]);
+
+const hybrid = {
+ src:{width:120,height:80},zones:[],motionStyle:'smart',shapeSequence:'smart',elementDirection:'rtl',
+ baseLines:[{points:[[74,35],[82,35],[90,35]]}],
+ centerBaseLines:[{points:[[104,15],[110,15],[116,15]]}],
+ centerShapeGroups:[
+  {id:1,lineIndices:[0],rasterLabels:[1],bounds:{x:100,y:10,width:18,height:12,cx:109,cy:16},area:20},
+  {id:2,lineIndices:[],rasterLabels:[2],bounds:{x:70,y:30,width:22,height:15,cx:81,cy:37.5},area:18},
+  {id:3,lineIndices:[],rasterLabels:[3],bounds:{x:20,y:50,width:12,height:8,cx:26,cy:54},area:8}
+ ],
+ contourShapeGroups:[
+  {id:1,lineIndices:[],rasterLabels:[1],bounds:{x:100,y:10,width:18,height:12,cx:109,cy:16},area:20},
+  {id:2,lineIndices:[0],rasterLabels:[2],bounds:{x:70,y:30,width:22,height:15,cx:81,cy:37.5},area:18},
+  {id:3,lineIndices:[],rasterLabels:[3],bounds:{x:20,y:50,width:12,height:8,cx:26,cy:54},area:8}
+ ],shapeMetrics:{}
+};
+core.applyZones(hybrid);
+assert.equal(hybrid.shapeGroups.length,3);
+assert.ok(hybrid.shapeGroups.every(group=>group.pathCount>0),
+ 'Every raster element must receive a hand route, including components missing centerline paths');
+assert.equal(hybrid.shapeGroups.filter(group=>group.source==='contour-fallback').length,1,
+ 'Contour paths should be used for an element with no centerline path');
+assert.equal(hybrid.shapeGroups.filter(group=>group.source==='synthetic-component-sweep').length,1,
+ 'A component with no extracted contour path must receive a short fallback hand sweep');
+
 grouped.shapeSequence='strokes';core.applyZones(grouped);
 assert.equal(grouped.shapeGroups.length,3,'Stroke mode must expose individual paths');
 assert.ok(grouped.shapeGroups.every(g=>g.pathCount===1));
