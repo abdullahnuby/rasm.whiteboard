@@ -94,3 +94,21 @@ const routed=vm.runInNewContext((await readFile('dist/motion.js','utf8'))+';rout
 const far={points:[[90,0],[100,0]]},close={points:[[12,0],[20,0]]},origin={points:[[0,0],[10,0]]};
 const route=routed([origin,far,close]);
 assert.equal(route[1].points,close.points,'Nearby strokes must precede distant strokes');
+const shapeA={points:[[90,10],[95,10]]},shapeB={points:[[70,10],[75,10]]},shapeC={points:[[20,10],[25,10]]};
+const grouped={
+ src:{width:120,height:60},zones:[],motionStyle:'smart',shapeSequence:'smart',
+ baseLines:[shapeA,shapeB,shapeC],centerBaseLines:[shapeA,shapeB,shapeC],
+ centerShapeGroups:[
+  {id:1,lineIndices:[0,1],bounds:{x:68,y:8,width:28,height:5},area:50},
+  {id:2,lineIndices:[2],bounds:{x:18,y:8,width:10,height:5},area:25}
+ ],contourShapeGroups:[],shapeMetrics:{backend:'builtin-components',shapes:2}
+};
+core.applyZones(grouped);
+assert.equal(grouped.shapeGroups.length,2,'Smart sequencing must keep related paths in one shape');
+assert.deepEqual(Array.from(grouped.shapeGroups.map(g=>g.pathCount)),[2,1]);
+assert.equal(grouped.lines[0].shapeId,1);
+assert.equal(grouped.lines.at(-1).shapeId,2);
+grouped.shapeSequence='strokes';core.applyZones(grouped);
+assert.equal(grouped.shapeGroups.length,3,'Stroke mode must expose individual paths');
+assert.ok(grouped.shapeGroups.every(g=>g.pathCount===1));
+
