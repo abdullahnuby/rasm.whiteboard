@@ -84,7 +84,7 @@ function render(t){
  }
  if(original&&cache.pixels){
   let reveal=frac/.96;
-  if(s.length)reveal=frac<.86?target/s.length*230/256:(230+(frac-.86)/.10*26)/256;
+  if(s.length)reveal=frac<.86?(Number.isFinite(motion.progress)?motion.progress:target/s.length)*230/256:(230+(frac-.86)/.10*26)/256;
   if(revealPixels(cache.pixels,Math.min(1,reveal)))cache.c.putImageData(cache.pixels.image,0,0)
  }
  cache.t=target;const sc=Math.min(W/s.src.width,H/s.src.height)*.96,ox=(W-sc*s.src.width)/2,oy=(H-sc*s.src.height)/2;
