@@ -55,3 +55,5 @@ header .primary:hover:enabled{background:#eadfff;color:#342553}
 header .menuButton:hover:enabled{background:#38304d;color:white}
 #exportDownload{align-self:flex-start;min-width:132px}
 #exportPanel{scroll-margin-top:84px}
+
+.engineDiagnostics{margin:12px 18px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fbfaff}.engineDiagnostics pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:220px;overflow:auto;direction:rtl;text-align:right;color:var(--dim);font:12px/1.7 ui-monospace,monospace;margin:8px 0}.engineDiagnostics button{font-size:13px}

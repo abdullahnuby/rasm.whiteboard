@@ -102,6 +102,11 @@
 </output>
 <input id="seek" type="range" min="0" value="0" step=".01" aria-label="موضع التشغيل">
 </div>
+<details class="sceneList engineDiagnostics" id="engineDiagnosticsPanel" hidden>
+<summary>تشخيص محرك الرسم</summary>
+<pre id="engineDiagnosticsText">لم يتم تحليل المشهد بعد.</pre>
+<button id="downloadEngineDiagnostics" type="button">تنزيل تقرير المحرك JSON</button>
+</details>
 <section class="timelinePanel">
 <div class="timelineToolbar">
 <div>
@@ -178,6 +183,11 @@
 <label>طريقة حركة اليد<select id="motionStyle">
 <option value="smart">مسارات رئيسية · حركة هادئة</option>
 <option value="contour">تفاصيل دقيقة · تتبّع الحدود</option>
+</select>
+</label>
+<label>اتجاه ترتيب العناصر<select id="elementDirection">
+<option value="rtl">من اليمين إلى الشمال</option>
+<option value="ltr">من الشمال إلى اليمين</option>
 </select>
 </label>
 <button id="zoneEdit">ترتيب مناطق الرسم</button>
@@ -339,6 +349,10 @@
 <script src="timeline.js">
 </script>
 <script src="export.js">
+</script>
+<script src="vendor/paper-core.js">
+</script>
+<script src="engine-v2.js">
 </script>
 <script src="motion.js">
 </script>

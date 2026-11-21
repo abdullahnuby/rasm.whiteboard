@@ -3,10 +3,10 @@ import { readFile } from 'node:fs/promises';
 const html = await readFile('dist/index.html', 'utf8');
 const ids = [...html.matchAll(/ id="([^"]+)"/g)].map(match => match[1]);
 assert.equal(new Set(ids).size, ids.length, 'Duplicate HTML IDs');
-for (const file of ['app.js', 'project.js', 'zones.js', 'engine.js', 'engine-worker.js', 'reliability.js', 'timeline.js', 'export.js', 'motion-worker.js','offline-export.js','live-export.js','interface.js']) {
+for (const file of ['app.js', 'project.js', 'zones.js', 'engine-v2.js', 'engine.js', 'engine-worker.js', 'reliability.js', 'timeline.js', 'export.js', 'motion-worker.js','offline-export.js','live-export.js','interface.js']) {
   const js = await readFile('dist/' + file, 'utf8');
   if (file === 'engine-worker.js') {
-    assert.ok(js.includes("importScripts('engine.js')"), 'Worker must load its dependencies');
+    assert.ok(js.includes("'engine-v2.js'"), 'Image worker must load the shared Engine v2 core');
   }
   for (const [, id] of js.matchAll(/\bel\('([^']+)'\)/g)) {
     assert.ok(ids.includes(id), 'Missing control ' + id);
@@ -14,6 +14,18 @@ for (const file of ['app.js', 'project.js', 'zones.js', 'engine.js', 'engine-wor
 }
 assert.ok(html.includes('id="speedHint"'), 'Speed duration guidance must be present');
 assert.ok(html.includes('value="0.1"'), 'Very slow hand-speed preset must be available');
+assert.ok(html.includes('id="elementDirection"'), 'Element reading direction must be selectable');
+assert.ok(html.includes('id="engineDiagnosticsPanel"'), 'Scene diagnostics panel must be available');
+assert.ok(html.includes('id="downloadEngineDiagnostics"'), 'Engine diagnostics export must be available');
+const appSource=await readFile('dist/app.js','utf8');
+assert.ok(!appSource.includes('frac/.86')&&!appSource.includes('frac/.96'), 'Preview must not use independent hand and image clocks');
+assert.ok(!appSource.includes('ctx.rect(0,0,s.src.width,s.src.height*reveal)'), 'Preview must not use a top-to-bottom image wipe');
+const projectSource=await readFile('dist/project.js','utf8');
+assert.ok(projectSource.includes('await prepareColorSchedule(originals[index])'), 'Playback must wait for element schedules');
+assert.ok(projectSource.includes('elementDirection'), 'Reading direction must be persisted in .rasm projects');
+assert.ok(html.indexOf('paper-core.js')<html.indexOf('engine-v2.js'), 'Paper.js must load before the engine core');
+assert.ok(html.indexOf('engine-v2.js')<html.indexOf('motion.js'), 'Engine v2 must load before the motion adapter');
+
 assert.ok(html.indexOf('motion.js') < html.indexOf('engine.js'), 'motion.js must load before engine.js');
 assert.ok(html.indexOf('engine.js') < html.indexOf('app.js'), 'engine.js must load before app.js');
 

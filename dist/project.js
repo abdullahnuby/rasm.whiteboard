@@ -40,7 +40,26 @@ async function importMedia(items){
 }
 el('soundFile').onchange=async e=>{const file=e.target.files[0];e.target.value='';await attachRecording(file)};
 el('audioClear').onclick=()=>{stop();soundAsset=soundBuffer=null;showAudio();queueSave()};
-el('play').onclick=async()=>{if(running)return stop();try{await readySound();if(time>=total()-.001)time=0;run()}catch{el('msg').textContent='تعذّر تشغيل الصوت.'}};
+el('play').onclick=async()=>{
+ if(running)return stop();
+ if(loading||recording||!scenes.length)return;
+ const button=el('play');button.disabled=true;button.textContent='…';
+ try{
+  await readySound();
+  const originals=scenes.filter(scene=>scene.mode==='original');
+  for(let index=0;index<originals.length;index++){
+   el('msg').textContent='تجهيز خطة العناصر للمشهد '+(index+1)+' من '+originals.length+'…';
+   await prepareColorSchedule(originals[index]);
+  }
+  if(time>=total()-.001)time=0;
+  run();
+ }catch(error){
+  el('msg').textContent='تعذّر تجهيز محرك الرسم: '+String(error.message||error);
+ }finally{
+  button.disabled=false;
+  if(!running)button.textContent='▶︎';
+ }
+};
 el('copy').onclick=()=>{if(!scenes.length)return;let clone={...scenes[selected],name:scenes[selected].name+' (نسخة)'};scenes.splice(selected+1,0,clone);pick(selected+1);queueSave()};
 function busy(flag){loading=flag;document.querySelector('.workflow').inert=flag;document.querySelector('.grid').inert=flag;document.querySelector('.intro').inert=flag;el('export').disabled=flag||!scenes.length;el('projectMenu').disabled=flag;if(typeof syncDrawer==='function')syncDrawer()}
 function setTitle(value){title=String(value||'مشروع وايت بورد').trim().slice(0,100)||'مشروع وايت بورد';el('titleView').textContent=el('projectName').value=title}
@@ -51,7 +70,7 @@ const asUrl=x=>typeof x==='string'?Promise.resolve(x):asData(x);
 // Settings are copied synchronously so edits made while images encode cannot tear the snapshot.
 // Images and audio stay Blobs for IndexedDB (no base64 bloat, no main-thread PNG encoding); the .rasm file gets data URLs.
 async function snapshot(forFile){
- const rows=scenes.map(s=>{const {name,duration,speed,motionStyle,mode,tone,side,hold,paper,transition,sourceHand,handSize,weight}=s;return {scene:s,row:{name,duration,speed,motionStyle,mode,tone,side,hold,paper,transition,sourceHand,handSize,weight,zones:s.zones.map(z=>({...z}))}}});
+ const rows=scenes.map(s=>{const {name,duration,speed,motionStyle,elementDirection,mode,tone,side,hold,paper,transition,sourceHand,handSize,weight}=s;return {scene:s,row:{name,duration,speed,motionStyle,elementDirection,mode,tone,side,hold,paper,transition,sourceHand,handSize,weight,zones:s.zones.map(z=>({...z}))}}});
  const head={format:'rasm-studio',version:3,title,demo,ratio:el('ratio').value,quality:el('quality').value,exportFormat:el('exportFormat').value,exportEngine:el('exportEngine').value,selected,hand:handData,tip:handTip};
  const sound=soundAsset;
  for(const item of rows){const s=item.scene;if(!s.asset)s.asset=await canvasBlob(s.src);item.row.image=forFile?await asUrl(s.asset):s.asset}
@@ -180,6 +199,7 @@ async function readProject(p){
    asset:row.image,
    speed:choose(row.speed,[.1,.15,.2,.25,.35,.5,.75,1],1),
    motionStyle:choose(row.motionStyle,['smart','contour'],'smart'),
+   elementDirection:choose(row.elementDirection,['rtl','ltr'],'rtl'),
    sourceHand:choose(row.sourceHand,['auto','detect','present','clean'],'auto'),
    weight:choose(row.weight,[1,1.4,2.3],1.4),
    handSize:within(row.handSize,55,160,100),
