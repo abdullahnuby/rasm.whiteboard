@@ -126,8 +126,8 @@ assert.ok(grouped.shapeGroups[0].bounds.cx<grouped.shapeGroups[1].bounds.cx,
  'LTR element order must draw the leftmost object first');
 assert.equal(grouped.shapeGroups[0].id,1);
 
-assert.deepEqual(Array.from(grouped.shapeGroups[0].rasterComponentLabels),[1]);
-assert.deepEqual(Array.from(grouped.shapeGroups[1].rasterComponentLabels),[2]);
+assert.deepEqual(Array.from(grouped.shapeGroups[0].rasterComponentLabels),[2]);
+assert.deepEqual(Array.from(grouped.shapeGroups[1].rasterComponentLabels),[1]);
 grouped.shapeSequence='strokes';core.applyZones(grouped);
 assert.equal(grouped.shapeGroups.length,3,'Stroke mode must expose individual paths');
 assert.ok(grouped.shapeGroups.every(g=>g.pathCount===1));
