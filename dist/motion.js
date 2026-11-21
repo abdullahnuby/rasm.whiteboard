@@ -234,7 +234,7 @@ function requestColorSchedule(scene){
  const id=++scheduleJobId;scheduleQueued.add(lines);scheduleJobs.set(id,{scene,lines,width,height});
  try{
   const rasterLabels=scene.rasterLabels?.length===width*height?scene.rasterLabels.slice():null;
-  const payload={id,width,height,length:scene.length,lines:lines.map(line=>({start:line.start,points:line.points})),rasterLabels};
+  const payload={id,width,height,length:scene.length,lines:lines.map(line=>({start:line.start,shapeId:line.shapeId,points:line.points})),rasterLabels,shapeSequence:scene.shapeSequence||'smart',shapeGroups:(scene.shapeGroups||[]).map(group=>({id:group.id,rasterComponentLabels:group.rasterComponentLabels||[]}))};
   worker.postMessage(payload,rasterLabels?[rasterLabels.buffer]:[]);
  }catch{
   scheduleJobs.delete(id);scheduleQueued.delete(lines);
@@ -278,12 +278,12 @@ function buildColorSchedule(scene){
   for(const k of [x>0?p-1:-1,x+1<w?p+1:-1,p-w,p+w]){
    if(k<0||k>=n||seen[k])continue;
    if(hasLabels&&(!label||labels[k]!==label))continue;
-   seen[k]=1;times[k]=Math.min(230,times[p]+1);queue[tail++]=k;
+   seen[k]=1;times[k]=Math.min(255,times[p]+1);queue[tail++]=k;
   }
  }
  if(hasLabels){
   for(let p=0;p<n;p++){
-   if(labels[p]&&!seen[p])times[p]=230;
+   if(labels[p]&&!seen[p])times[p]=255;
    else if(!labels[p])times[p]=255;
   }
   // Give every detected shape its own reveal interval. The first pixel in a
@@ -315,7 +315,7 @@ function buildColorSchedule(scene){
     const range=ranges.get(label);
     const local=range&&range.max>range.min?(times[p]-range.min)/(range.max-range.min):1;
     const progress=window.start+Math.max(0,Math.min(1,local))*(window.end-window.start);
-    times[p]=Math.min(230,Math.max(0,Math.floor(progress*230)));
+    times[p]=Math.min(255,Math.max(0,Math.floor(progress*255)));
    }
   }
  }else if(tail){
@@ -360,7 +360,7 @@ function strokeTravelPlan(lines){
 function strokeRevealTime(segment,pointIndex,totalDistance){
  if(!(totalDistance>0))return 0;
  const along=segment.draw+segment.cumulative[Math.min(segment.cumulative.length-1,Math.max(0,pointIndex))];
- return Math.min(230,Math.floor(230*along/totalDistance))
+ return Math.min(255,Math.floor(255*along/totalDistance))
 }
 function strokeProgress(scene,fraction){
  const plan=strokeTravelPlan(scene.lines);
