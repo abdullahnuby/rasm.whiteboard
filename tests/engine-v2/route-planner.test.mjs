@@ -63,3 +63,16 @@ test("spatial endpoint routing scales to thousands of disconnected strokes", () 
   assert.equal(new Set(routed.map(stroke => stroke.id)).size, strokes.length);
   assert.ok(elapsed < 8000, "6,000-stroke routing exceeded the 8-second regression budget: " + elapsed.toFixed(1) + "ms");
 });
+
+test("coincident junction endpoints are bucketed instead of rescanned quadratically", () => {
+  const strokes = Array.from({ length: 4000 }, (_, index) => ({
+    id: "junction-" + index,
+    points: [[0, 0], [index + 1, (index % 29) * 0.25 + 1]]
+  }));
+  const started = performance.now();
+  const routed = routeElementStrokes(strokes, "rtl");
+  const elapsed = performance.now() - started;
+  assert.equal(routed.length, strokes.length);
+  assert.equal(new Set(routed.map(stroke => stroke.id)).size, strokes.length);
+  assert.ok(elapsed < 8000, "4,000 coincident-junction strokes exceeded the 8-second regression budget: " + elapsed.toFixed(1) + "ms");
+});
