@@ -138,40 +138,68 @@ export function groupComponents(components: ComponentRecord[]): Array<{ id: numb
     return value;
   };
   const join = (a: number, b: number) => { const left = find(a), right = find(b); if (left !== right) parents[right] = left; };
-  // Uniform-grid candidate index avoids comparing every component with every
-  // other component on dense drawings. Exact geometric predicates remain the
-  // authority for grouping; the grid only narrows the candidate set.
+  // Spatial indexes are split by component size/area as well as position.
+  // Components that cannot be a valid parent/child are not compared, even when
+  // thousands of tiny marks occupy the same spatial cell.
   const cellSize = 48;
-  const cells = new Map<string, number[]>();
+  type SpatialIndex = Map<number, Map<string, number[]>>;
+  const enclosureIndex: SpatialIndex = new Map();
+  const attachmentIndex: SpatialIndex = new Map();
   const cellKey = (x: number, y: number) => Math.floor(x / cellSize) + ":" + Math.floor(y / cellSize);
-  components.forEach((component, index) => {
-    const key = cellKey(component.bounds.cx, component.bounds.cy);
+  const insert = (index: SpatialIndex, tier: number, key: string, componentIndex: number) => {
+    let cells = index.get(tier);
+    if (!cells) { cells = new Map(); index.set(tier, cells); }
     const bucket = cells.get(key) ?? [];
-    bucket.push(index);
+    bucket.push(componentIndex);
     cells.set(key, bucket);
+  };
+  const tierFor = (value: number) => value >= 1 ? Math.floor(Math.log2(value)) : -1;
+  components.forEach((component, index) => {
+    const b = component.bounds, key = cellKey(b.cx, b.cy);
+    insert(enclosureIndex, tierFor(Math.max(b.width, b.height)), key, index);
+    insert(attachmentIndex, tierFor(component.area), key, index);
   });
 
-  for (let i = 0; i < components.length; i++) {
-    const parent = components[i], b = parent.bounds;
-    const rangeX = Math.max(5, b.width * 0.45);
-    const rangeY = b.height * 0.5 + Math.max(2.5, b.height * 0.3) + Math.max(7, b.height * 0.55);
-    const minCellX = Math.floor((b.cx - rangeX) / cellSize);
-    const maxCellX = Math.floor((b.cx + rangeX) / cellSize);
-    const minCellY = Math.floor((b.cy - rangeY) / cellSize);
-    const maxCellY = Math.floor((b.cy + rangeY) / cellSize);
-
-    for (let cellY = minCellY; cellY <= maxCellY; cellY++) {
-      for (let cellX = minCellX; cellX <= maxCellX; cellX++) {
-        const candidates = cells.get(cellX + ":" + cellY);
-        if (!candidates) continue;
-        for (const j of candidates) {
-          if (i === j) continue;
-          const candidate = components[j];
-          if (encloses(b, candidate.bounds) || encloses(candidate.bounds, b) ||
-              attachSmallMark(candidate, parent) || attachSmallMark(parent, candidate)) join(i, j);
+  const visitCandidates = (
+    index: SpatialIndex, maximumMetric: number,
+    minX: number, maxX: number, minY: number, maxY: number,
+    visit: (candidateIndex: number) => void
+  ) => {
+    const maximumTier = tierFor(maximumMetric);
+    if (maximumTier < 0) return;
+    const minCellX = Math.floor(minX / cellSize), maxCellX = Math.floor(maxX / cellSize);
+    const minCellY = Math.floor(minY / cellSize), maxCellY = Math.floor(maxY / cellSize);
+    for (let tier = 0; tier <= maximumTier; tier++) {
+      const cells = index.get(tier);
+      if (!cells) continue;
+      for (let cellY = minCellY; cellY <= maxCellY; cellY++) {
+        for (let cellX = minCellX; cellX <= maxCellX; cellX++) {
+          const candidates = cells.get(cellX + ":" + cellY);
+          if (candidates) for (const candidateIndex of candidates) visit(candidateIndex);
         }
       }
     }
+  };
+
+  for (let i = 0; i < components.length; i++) {
+    const parent = components[i], b = parent.bounds;
+    // An enclosed component's centre is inside the parent bounds; each of its
+    // dimensions must fit within the parent's smaller dimension / 1.35.
+    const enclosureLimit = Math.min(b.width, b.height) / 1.35;
+    visitCandidates(enclosureIndex, enclosureLimit, b.x, b.x + b.width, b.y, b.y + b.height, j => {
+      if (i !== j && encloses(b, components[j].bounds)) join(i, j);
+    });
+
+    // Detached marks are indexed by area first, then checked with the exact
+    // original alignment and gap rules.
+    const attachAreaLimit = parent.area * 0.22;
+    const rangeX = Math.max(5, b.width * 0.45);
+    const rangeY = b.height * 0.5 + Math.max(2.5, b.height * 0.3) + Math.max(7, b.height * 0.55);
+    visitCandidates(attachmentIndex, attachAreaLimit,
+      b.cx - rangeX, b.cx + rangeX, b.cy - rangeY, b.cy + rangeY, j => {
+        if (i !== j && attachSmallMark(components[j], parent)) join(i, j);
+      }
+    );
   }
   const buckets = new Map<number, ComponentRecord[]>();
   components.forEach((component, index) => {

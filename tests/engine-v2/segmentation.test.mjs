@@ -53,11 +53,13 @@ test("spatial grouping handles thousands of unrelated detached components", () =
   const components = [];
   const columns = 100;
   for (let index = 0; index < 5000; index++) {
-    const x = (index % columns) * 4;
-    const y = Math.floor(index / columns) * 4;
+    // Keep the entire fixture inside one spatial cell. All marks have equal,
+    // tiny dimensions and therefore cannot enclose or attach to one another.
+    const x = (index % columns) * 0.45;
+    const y = Math.floor(index / columns) * 0.45;
     components.push({
       id: index + 1, area: 1,
-      bounds: { x, y, width: 1, height: 1, cx: x, cy: y }
+      bounds: { x, y, width: 0.1, height: 0.1, cx: x + 0.05, cy: y + 0.05 }
     });
   }
   const groups = groupComponents(components);
