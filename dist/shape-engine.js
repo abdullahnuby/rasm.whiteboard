@@ -32,9 +32,16 @@
   const ratioY=overlapY/Math.max(1,Math.min(a.height,b.height));
   const small=componentA.area<=componentB.area?componentA:componentB;
   const large=small===componentA?componentB:componentA;
-  const diacritic=small.area<=large.area*.35&&small.bounds.height<=large.bounds.height*.55&&small.bounds.width<=large.bounds.width*.6;
-  if(diacritic&&gapY<=Math.max(6,large.bounds.height*.32)&&gapX<=Math.max(4,large.bounds.width*.38))return true;
-  return (gapX<=gx&&ratioY>=.12)||(gapY<=gy&&ratioX>=.12)||(gapX<=gx*.55&&gapY<=gy*.55);
+  const dot=small.area<=large.area*.22&&
+   small.bounds.width<=Math.max(5,large.bounds.width*.72)&&
+   small.bounds.height<=Math.max(5,large.bounds.height*.55);
+  const alignedX=Math.abs(small.bounds.cx-large.bounds.cx)<=Math.max(6,large.bounds.width*.42);
+  const closeVertically=gapY<=Math.max(6,large.bounds.height*.48);
+  const closeHorizontally=gapX<=Math.max(4,large.bounds.width*.32);
+  if(dot&&alignedX&&closeVertically&&closeHorizontally)return true;
+  // Equal-size neighbouring objects stay separate unless their raster masks
+  // almost touch and their projections strongly overlap.
+  return (gapX<=gx&&ratioY>=.38)||(gapY<=gy&&ratioX>=.38);
  }
  function connectedComponentsFallback(mask,width,height){
   const size=width*height,labels=new Int32Array(size),queue=new Int32Array(size),components=[];
@@ -63,7 +70,7 @@
   try{
    src=new cv.Mat(height,width,cv.CV_8UC1);src.data.set(mask);
    closed=new cv.Mat();
-   const kw=clamp(Math.round(width/105),5,17),kh=clamp(Math.round(height/240),3,7);
+   const kw=3,kh=3; // bridge only antialiasing cracks; do not fuse neighbouring elements
    kernel=cv.getStructuringElement(cv.MORPH_ELLIPSE,new cv.Size(kw,kh));
    cv.morphologyEx(src,closed,cv.MORPH_CLOSE,kernel);
    labelsMat=new cv.Mat();stats=new cv.Mat();centroids=new cv.Mat();
@@ -84,7 +91,7 @@
   if(!components.length)return {groups:[],labelToGroup:new Map()};
   const parent=components.map((_,i)=>i),find=x=>{while(parent[x]!==x){parent[x]=parent[parent[x]];x=parent[x]}return x};
   const join=(a,b)=>{a=find(a);b=find(b);if(a!==b)parent[b]=a};
-  const gx=clamp(Math.round(width*.022*scale),4,24),gy=clamp(Math.round(height*.014*scale),3,16);
+  const gx=clamp(Math.round(width*.005*scale),2,7),gy=clamp(Math.round(height*.006*scale),2,6);
   const sorted=components.map((component,index)=>({component,index})).sort((a,b)=>a.component.bounds.x-b.component.bounds.x);
   for(let i=0;i<sorted.length;i++){
    const a=sorted[i].component.bounds;
@@ -116,6 +123,7 @@
   }
   rows.sort((a,b)=>a.cy-b.cy);
   const ordered=rows.flatMap(row=>row.groups.sort((a,b)=>b.bounds.cx-a.bounds.cx));
+  ordered.forEach((group,index)=>{group.rasterLabels=[index+1];group.id=index+1});
   const labelToGroup=new Map();ordered.forEach((group,index)=>group.componentLabels.forEach(label=>labelToGroup.set(label,index+1)));
   return {groups:ordered,labelToGroup};
  }
@@ -132,7 +140,7 @@
   return best;
  }
  function groupPaths(lines,componentGroups,labels,labelToGroup,width,height,source){
-  const groups=componentGroups.map((group,index)=>({...group,id:index+1,lineIndices:[],source}));
+  const groups=componentGroups.map((group,index)=>({...group,id:index+1,rasterLabels:[index+1],lineIndices:[],source}));
   const unmatched=[];
   lines.forEach((line,index)=>{
    const points=line.points||[];if(!points.length){unmatched.push(index);return}
@@ -161,12 +169,12 @@
     const q=group.bounds,dx=Math.max(0,q.x-(b.x+b.width),b.x-(q.x+q.width)),dy=Math.max(0,q.y-(b.y+b.height),b.y-(q.y+q.height));
     const d=Math.hypot(dx,dy);if(d<best){best=d;target=group}
    }
-   const limit=Math.max(12,Math.min(width,height)*.035);
+   const limit=Math.max(4,Math.min(9,Math.min(width,height)*.012));
    if(target&&best<=limit){
     target.lineIndices.push(index);
     const q=target.bounds,minX=Math.min(q.x,b.x),minY=Math.min(q.y,b.y),maxX=Math.max(q.x+q.width,b.x+b.width),maxY=Math.max(q.y+q.height,b.y+b.height);
     target.bounds={x:minX,y:minY,width:maxX-minX,height:maxY-minY,cx:(minX+maxX)/2,cy:(minY+maxY)/2};
-   }else orphan.push({id:groups.length+orphan.length+1,lineIndices:[index],bounds:{...b},area:0,componentLabels:[],source:'path-cluster'});
+   }else orphan.push({id:groups.length+orphan.length+1,lineIndices:[index],bounds:{...b},area:0,componentLabels:[],rasterLabels:[],source:'path-cluster'});
   }
   orphan.sort((a,b)=>a.bounds.cy-b.bounds.cy||b.bounds.cx-a.bounds.cx);
   for(const group of orphan){group.id=groups.length+1;groups.push(group)}
