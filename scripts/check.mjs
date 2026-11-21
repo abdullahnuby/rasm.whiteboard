@@ -17,6 +17,9 @@ for (const file of ['app.js', 'project.js', 'zones.js', 'shape-engine.js', 'engi
 assert.ok(html.includes('id="speedHint"'), 'Speed duration guidance must be present');
 assert.ok(html.includes('value="0.1"'), 'Very slow hand-speed preset must be available');
 assert.ok(html.includes('id="shapeSequence"'), 'Shape-level sequencing control must be available');
+assert.ok(html.includes('id="elementDirection"'), 'Element direction selector must be available');
+assert.ok(html.includes('value="rtl">من اليمين إلى الشمال'), 'Arabic default direction must be RTL');
+assert.ok(html.includes('value="ltr">من الشمال إلى اليمين'), 'LTR sequence must be selectable');
 assert.ok(html.includes('value="smart">تجميع ذكي'), 'Smart shape sequence must be the default');
 assert.ok(html.indexOf('motion.js') < html.indexOf('shape-engine.js'), 'motion.js must load before the shape engine');
 assert.ok(html.indexOf('shape-engine.js') < html.indexOf('engine.js'), 'shape engine must load before image engine');
