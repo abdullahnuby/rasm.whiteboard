@@ -410,7 +410,8 @@
       ? source.pixels
       : source.src.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, source.width, source.height).data;
     const engineAnalysisV2 = result.engineAnalysisV2 ||
-      root.RasmWhiteboardCore.analyzeRaster(pixels, source.width, source.height);
+      (pixels ? root.RasmWhiteboardCore.analyzeRaster(pixels, source.width, source.height) : null);
+    if (!engineAnalysisV2) throw new Error('Engine worker did not return raster segmentation.');
     return { name, src: source.src, baseLines: result.lines, centerBaseLines: result.centerLines || [], centerMetrics: result.centerMetrics || null, motionStyle: 'smart', zones: [], handHint: !!handHint,
       thumb: source.src.toDataURL('image/jpeg', 0.65), lines: result.centerLines && result.centerLines.length ? result.centerLines : result.lines, length: result.centerLines && result.centerLines.length ? result.centerLength : result.length,
       duration: 10, engineVersion: 6, engineAnalysisV2, enginePlanV2: null, engineDiagnostics: engineAnalysisV2.diagnostics, ...defaults };
@@ -418,47 +419,139 @@
 
   let worker = null, requestId = 0;
   const pending = new Map();
+
+  function failWorker(reason) {
+    const active = worker;
+    worker = null;
+    try { active?.terminate(); } catch { /* worker cleanup is best-effort */ }
+    for (const task of pending.values()) {
+      clearTimeout(task.timer);
+      task.reject(reason instanceof Error ? reason : new Error(String(reason)));
+    }
+    pending.clear();
+  }
+
   function getWorker() {
     if (typeof root.Worker !== 'function') return null;
     if (worker) return worker;
     try {
       worker = new root.Worker('engine-worker.js');
       worker.onmessage = event => {
-        const task = pending.get(event.data.id);
+        const data = event.data || {};
+        const task = pending.get(data.id);
         if (!task) return;
-        pending.delete(event.data.id);
-        if (event.data.error) task.reject(new Error(event.data.error));
-        else task.resolve(event.data.result);
+        if (data.progress) {
+          task.onProgress?.(data.progress);
+          return;
+        }
+        pending.delete(data.id);
+        clearTimeout(task.timer);
+        if (data.error) task.reject(new Error(data.error));
+        else task.resolve(data.result);
       };
-      worker.onerror = error => {
-        for (const task of pending.values()) task.reject(error);
-        pending.clear(); worker.terminate(); worker = null;
+      worker.onerror = event => {
+        const detail = event?.message || event?.error?.message || 'unknown worker error';
+        failWorker(new Error('Engine worker crashed: ' + detail));
       };
+      worker.onmessageerror = () => failWorker(new Error('Engine worker returned an unreadable message.'));
       return worker;
-    } catch { return null; }
+    } catch (error) {
+      worker = null;
+      return null;
+    }
   }
+
+  function requestWorker(payload, transfer = [], timeoutMs = 90000) {
+    const activeWorker = getWorker();
+    if (!activeWorker) {
+      return Promise.reject(new Error('This browser could not start the image-processing Worker. Enable browser Workers or try a current Chrome, Edge, Firefox, or Safari release. The page was not switched to a blocking main-thread fallback.'));
+    }
+    const id = ++requestId;
+    return new Promise((resolve, reject) => {
+      const task = { resolve, reject, timer: null, onProgress: payload.onProgress };
+      task.timer = setTimeout(() => {
+        failWorker(new Error('Engine worker timed out after ' + Math.round(timeoutMs / 1000) + ' seconds while processing ' + (payload.operation || 'the image') + '. The task was stopped to keep the editor responsive.'));
+      }, timeoutMs);
+      pending.set(id, task);
+      const message = { ...payload, onProgress: undefined, id };
+      try {
+        activeWorker.postMessage(message, transfer);
+      } catch (error) {
+        failWorker(new Error('Could not send work to the image-processing Worker: ' + String(error?.message || error)));
+      }
+    });
+  }
+
   function analyze(img, name) {
     const source = prepareSource(img);
     const handHint = typeof root.edgeSkinRegion === 'function' ? root.edgeSkinRegion(source.pixels, source.width, source.height) : false;
     return makeScene(name, source, extractPaths(source.pixels, source.width, source.height), handHint);
   }
+
   async function analyzeAsync(img, name) {
     const source = prepareSource(img);
     const handHint = typeof root.edgeSkinRegion === 'function' ? root.edgeSkinRegion(source.pixels, source.width, source.height) : false;
-    const activeWorker = getWorker();
-    if (!activeWorker) return makeScene(name, source, extractPaths(source.pixels, source.width, source.height), handHint);
-    const id = ++requestId;
+    const pixels = source.pixels;
     let result;
     try {
-      result = await new Promise((resolve, reject) => {
-        pending.set(id, { resolve, reject });
-        activeWorker.postMessage({ id, width: source.width, height: source.height, pixels: source.pixels.buffer }, [source.pixels.buffer]);
-      });
-    } catch {
-      const pixels = source.src.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, source.width, source.height).data;
-      result = extractPaths(pixels, source.width, source.height);
+      result = await requestWorker({
+        action: 'analyze', operation: 'image analysis of "' + String(name || 'image') + '"',
+        width: source.width, height: source.height, pixels: pixels.buffer
+      }, [pixels.buffer], 90000);
+    } catch (error) {
+      throw new Error('تعذّر تحليل الصورة "' + String(name || 'بدون اسم') + '": ' + String(error?.message || error));
     }
     return makeScene(name, source, result, handHint);
   }
-  root.RasmImageEngine = { analyze, analyzeAsync, extractPaths, simplifyPolyline, resamplePolyline };
+
+  async function planAsync(scene) {
+    const width = scene?.src?.width || 0, height = scene?.src?.height || 0;
+    const existing = scene?.engineAnalysisV2;
+    if (!width || !height || !existing?.rasterLabels || existing.rasterLabels.length !== width * height) {
+      throw new Error('Engine v2 cannot plan this scene: raster segmentation is missing or invalid.');
+    }
+    const rasterLabels = existing.rasterLabels.slice();
+    const analysis = { ...existing, rasterLabels };
+    let response;
+    try {
+      response = await requestWorker({
+        action: 'plan', operation: 'drawing-plan generation',
+        width, height, analysis,
+        centerBaseLines: scene.centerBaseLines || [],
+        baseLines: scene.baseLines || [],
+        options: {
+          direction: scene.elementDirection || 'rtl',
+          motionStyle: scene.motionStyle || 'smart',
+          zones: scene.zones || []
+        }
+      }, [rasterLabels.buffer], 60000);
+    } catch (error) {
+      throw new Error('تعذّر بناء خطة الرسم خارج الواجهة: ' + String(error?.message || error));
+    }
+    const plan = response?.plan;
+    if (!plan || !plan.rasterLabels || plan.rasterLabels.length !== width * height) {
+      throw new Error('Engine worker returned an incomplete drawing plan.');
+    }
+    // Reuse the returned ownership map for analysis, plan and reveal scheduling.
+    scene.engineAnalysisV2.rasterLabels = plan.rasterLabels;
+    scene.enginePlanV2 = plan;
+    scene.engineDiagnostics = plan.diagnostics;
+    scene.engineScheduleError = undefined;
+    scene.rasterLabels = plan.rasterLabels;
+    scene.lines = plan.lines;
+    scene.length = plan.length;
+    scene.totalDistance = plan.totalDistance;
+    scene.shapeGroups = plan.elements.map(element => ({
+      id: element.id,
+      rasterComponentLabels: element.componentIds.slice(),
+      pathCount: element.strokes.length,
+      bounds: { ...element.bounds },
+      startDistance: element.startDistance,
+      endDistance: element.endDistance
+    }));
+    scene.usingCenterline = (scene.motionStyle || 'smart') !== 'contour' &&
+      plan.lines.some(line => line.source === 'centerline');
+    return plan;
+  }
+  root.RasmImageEngine = { analyze, analyzeAsync, planAsync, extractPaths, simplifyPolyline, resamplePolyline };
 })(typeof self !== 'undefined' ? self : (typeof window !== 'undefined' ? window : globalThis));
