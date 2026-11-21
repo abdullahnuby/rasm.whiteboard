@@ -123,12 +123,19 @@ function run(end){
  stop();if(typeof startSound==='function')startSound(time);running=true;start=performance.now()-time*1000;el('play').textContent='Ⅱ';
  let lastPaint=-Infinity;const frameInterval=1000/(recording?24:30);
  function tick(now){
-  time=Math.min(total(),Math.max(0,(now-start)/1000));
-  if(now-lastPaint>=frameInterval||time>=total()){
-   lastPaint=now;render(time);
-   if(exportSession&&!exportSession.cancelled){const pct=Math.min(100,total()?time/total()*100:100);el('exportProgress').value=pct;el('exportPercent').textContent=Math.floor(pct)+'%';el('exportElapsed').textContent=time.toFixed(1)+' / '+total().toFixed(1)+' ثانية'}
+  try{
+   time=Math.min(total(),Math.max(0,(now-start)/1000));
+   if(now-lastPaint>=frameInterval||time>=total()){
+    lastPaint=now;render(time);
+    if(exportSession&&!exportSession.cancelled){const pct=Math.min(100,total()?time/total()*100:100);el('exportProgress').value=pct;el('exportPercent').textContent=Math.floor(pct)+'%';el('exportElapsed').textContent=time.toFixed(1)+' / '+total().toFixed(1)+' ثانية'}
+   }
+   if(time>=total()){stop();if(end)end()}else frame=requestAnimationFrame(tick)
+  }catch(error){
+   const reason=String(error?.message||error||'unknown rendering error');
+   stop();
+   el('msg').textContent='توقفت المعاينة بسبب خطأ في محرك الرسم: '+reason;
+   if(scenes[selected]){scenes[selected].engineScheduleError=reason;refreshEngineDiagnostics(scenes[selected])}
   }
-  if(time>=total()){stop();if(end)end()}else frame=requestAnimationFrame(tick)
  }
  frame=requestAnimationFrame(tick)
 }
