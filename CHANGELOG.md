@@ -1,3 +1,10 @@
+# 5.2.4 — Element-aware preview fallback and playback readiness
+- Remove the top-to-bottom image wipe used while the motion Worker is preparing its per-element reveal schedule.
+- Replace every row-major fallback (Worker unavailable, postMessage failure, Worker error, or preparation timeout) with a synchronous rebuild of the same element-owned, hand-timed color schedule.
+- Make the play control wait for each original-image scene's schedule before starting the hand or advancing the preview clock.
+- Add a multi-element regression test proving that synchronous fallback finishes the first element before revealing the second.
+- Keep the Worker as the normal fast path; only use the main-thread rebuild when the Worker is unavailable or fails.
+
 # 5.2.3 — Enclosure-based element grouping and consistent pixel connectivity
 - Change component grouping so disconnected marks are combined only when they are small aligned diacritics, lie inside an enclosing outline, or overlap strongly in both axes.
 - Stop merging unrelated neighbouring objects merely because their bounding boxes have close horizontal or vertical projections.

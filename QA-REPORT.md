@@ -1,24 +1,23 @@
-# RASM Studio 5.2.3 QA Report
+# RASM Studio 5.2.4 QA Report
 
-## Observations addressed from the 5.2.2 mobile screenshot
-- Closely aligned component bounding boxes could be merged even when the objects were visually separate. This could place a nearby word/object into the same drawable group as a cloud or badge.
-- OpenCV segmentation uses 8-connectivity, while the raster reveal flood fill used only 4-connectivity. Pixels connected only diagonally were left unvisited and assigned the terminal reveal time, causing fragments to appear at the end of an element rather than along its reveal.
+## Screenshot-derived root cause
+The iPhone screenshots at 00:04, 00:11, and 00:23 show horizontal bands of image pixels appearing across several unrelated shapes at once. Source inspection identified two explicit paths that bypassed element ordering:
+1. While the motion Worker had not returned a schedule, the preview clipped the original image with a top-to-bottom rectangle (image height multiplied by scene progress).
+2. If the Worker was unavailable, failed, or exceeded the 15-second preparation deadline, the fallback schedule revealed pixels in global row-major order.
 
-## Fixes
-- Component groups now merge only when a small mark passes the diacritic attachment tests, a component is nested inside an enclosing outline, or masks overlap substantially in both axes.
-- Bounding-box proximity/projection overlap alone no longer merges neighbouring visual elements.
-- Raster reveal now uses 8-neighbour connectivity, matching the connected-component topology used by OpenCV.
-- For a component with no centerline route, the motion engine now uses contour paths from the same raster component. If no contour path exists either, it generates a short sweep within that component's own bounds. This prevents labelled image elements from having no hand movement and being revealed only at the scene end.
-- Nested content inside a cloud/speech bubble/badge is grouped with its enclosing outline; nearby external text and illustrations remain independent elements.
+These paths reproduce the band-by-band pattern in the screenshots even when element-aware scheduling exists.
+
+## Fixes in 5.2.4
+- Removed the top-to-bottom rectangle fallback from original-image rendering.
+- Replaced all row-major fallback schedules with a synchronous call to the same buildColorSchedule(scene) used by the Worker. Fallback therefore keeps shape IDs, per-element windows, pen-lift travel and reveal ordering.
+- The play control now waits for every original-image scene to have a completed element-aware schedule before starting playback. The hand and preview clock do not begin while the schedule is still being prepared.
+- Export retains its existing prepareColorSchedule gate and now receives the same element-aware fallback on Worker failure.
 
 ## Regression tests
-- Nested visual component inside an enclosing outline groups with that outline.
-- Adjacent external object remains a separate group.
-- Detached small aligned marks still attach to their base.
-- Diagonally connected pixels reveal during the owning element interval, rather than as terminal leftovers.
-- Existing two-element worker test still checks element completion timing and hand arrival.
-- Existing shape segmentation, directional routing, image/schedule workers, reliability, timeline, export, and server resource tests remain in the build.
+- A multi-element synthetic scene is scheduled with the synchronous fallback and asserts that every pixel of element 1 is revealed before any pixel in element 2.
+- Static build checks prohibit the old top-to-bottom preview crop and require playback to await prepareColorSchedule.
+- Existing element grouping, diagonal connectivity, centerline/contour/synthetic route fallback, Worker timing, reliability, timeline, export and resource tests remain in the build.
 
 ## Validation boundary
-- All tests are synthetic geometric fixtures. The exact user illustration file (.rasm or original image) was not attached, so this does not constitute scene-specific visual acceptance.
-- Final acceptance still requires opening the same project in the new preview and checking the same moment around 00:07. Safari/iPhone playback and export must be checked before production merge.
+The Worker remains the preferred asynchronous fast path. The main-thread rebuild is only used if the Worker cannot deliver a schedule within the preparation window. It may take longer on lower-powered phones, but it will not deliberately revert to a row-major wipe.
+The user's exact project file is still needed to validate its image-specific segmentation and stroke ownership.

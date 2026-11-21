@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
-const core=vm.runInNewContext((await readFile('dist/motion.js','utf8'))+';({edgeSkinRegion,overlayEnabled,applyZones,sceneSeconds,strokeProgress,strokeTravelPlan,strokeRevealTime,routeStrokes,orderShapeGroups})');
+const core=vm.runInNewContext((await readFile('dist/motion.js','utf8'))+';({edgeSkinRegion,overlayEnabled,applyZones,sceneSeconds,strokeProgress,strokeTravelPlan,strokeRevealTime,fallbackColorSchedule,routeStrokes,orderShapeGroups})');
 const pixels=new Uint8ClampedArray(100*100*4).fill(255);
 assert.equal(core.edgeSkinRegion(pixels,100,100),false);
 for(let y=30;y<100;y++)for(let x=42;x<68;x++)pixels.set([163,109,82,255],(y*100+x)*4);
@@ -78,6 +78,27 @@ assert.equal(interpolated.drawing,true);
 assert.ok(Math.abs(interpolated.target-2.5)<1e-9);
 assert.ok(Math.abs(interpolated.tip[0]-11.5)<1e-9);
 
+// Worker-unavailable fallback must preserve element ownership and hand timing.
+{
+ const width=64,height=24,labels=new Uint16Array(width*height);
+ for(let y=5;y<=14;y++)for(let x=3;x<=12;x++)labels[y*width+x]=1;
+ for(let y=5;y<=14;y++)for(let x=45;x<=55;x++)labels[y*width+x]=2;
+ const lines=[
+  {start:0,shapeId:1,points:[[4,10],[11,10]]},
+  {start:2,shapeId:2,points:[[46,10],[54,10]]}
+ ];
+ const fallback=core.fallbackColorSchedule({
+  src:{width,height},length:4,lines,rasterLabels:labels,shapeSequence:'smart',
+  shapeGroups:[{id:1,rasterComponentLabels:[1]},{id:2,rasterComponentLabels:[2]}]
+ });
+ assert.equal(fallback.linear,undefined,'Fallback must not use row-major pixels');
+ const times=new Uint8Array(width*height);
+ for(let t=0;t<256;t++)for(let i=fallback.ends[t];i<fallback.ends[t+1];i++)times[fallback.order[i]]=t;
+ const first=[],second=[];
+ for(let p=0;p<labels.length;p++){if(labels[p]===1)first.push(times[p]);if(labels[p]===2)second.push(times[p])}
+ assert.ok(Math.max(...first)<Math.min(...second),
+  'Synchronous fallback must finish the first element before revealing the second');
+}
 // Equal physical distances must consume equal time even if point density differs.
 const uneven={length:4,lines:[{start:0,points:[[0,0],[1,0],[100,0],[101,0]]}]};
 const middle=core.strokeProgress(uneven,.5);

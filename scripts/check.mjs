@@ -21,8 +21,10 @@ const appSource = await readFile('dist/app.js', 'utf8');
 assert.ok(!appSource.includes('frac/.86') && !appSource.includes('frac/.96'), 'Hand and image reveal must not use separate delayed clocks');
 assert.ok(appSource.includes('strokeProgress(s,frac)'), 'Hand must use the same progress clock as the image reveal');
 assert.ok(appSource.includes('revealPixels(cache.pixels,reveal)'), 'Original image reveal must follow hand progress directly');
+assert.ok(!appSource.includes('ctx.rect(0,0,s.src.width,s.src.height*reveal)'), 'Original preview must never use a top-to-bottom fallback wipe');
 const projectSource = await readFile('dist/project.js', 'utf8');
 assert.ok(projectSource.includes('handPaceVersion'), 'New slow drawing pace must persist in project files');
+assert.ok(projectSource.includes('await prepareColorSchedule(originals[i])'), 'Playback must wait for element-aware schedules before starting');
 
 assert.ok(html.includes('id="shapeSequence"'), 'Shape-level sequencing control must be available');
 assert.ok(html.includes('id="elementDirection"'), 'Element direction selector must be available');

@@ -1,6 +1,6 @@
 {
   "name": "rasm-whiteboard-studio",
-  "version": "5.2.3",
+  "version": "5.2.4",
   "private": true,
   "scripts": {
     "build": "node scripts/vendor-assets.mjs && node --check dist/shape-engine.js && node --check dist/engine.js && node --check dist/engine-worker.js && node --check dist/motion-worker.js && node scripts/motion-worker-elements-test.mjs && node --check dist/app.js && node --check dist/project.js && node --check dist/motion.js && node --check dist/zones.js && node scripts/check.mjs && node scripts/vendor-test.mjs && node scripts/shape-engine-test.mjs && node scripts/motion-test.mjs && node scripts/engine-test.mjs && node scripts/schedule-test.mjs && node --check dist/reliability.js && node scripts/reliability-test.mjs && node --check dist/timeline.js && node scripts/timeline-test.mjs && node --check dist/export.js && node scripts/export-test.mjs && node --check dist/offline-export.js && node --check dist/live-export.js && node --check dist/interface.js && node scripts/serve-test.mjs",
