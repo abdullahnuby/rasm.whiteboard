@@ -5,6 +5,79 @@ function startEndpoint(stroke: StrokePath, reverse: boolean): Point {
   return reverse ? stroke.points[stroke.points.length - 1] : stroke.points[0];
 }
 
+interface Endpoint {
+  x: number;
+  y: number;
+  strokeIndex: number;
+  reverse: boolean;
+}
+interface EndpointNode extends Endpoint {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  left: EndpointNode | null;
+  right: EndpointNode | null;
+}
+
+function buildEndpointTree(items: Endpoint[]): EndpointNode | null {
+  if (!items.length) return null;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const item of items) {
+    minX = Math.min(minX, item.x); maxX = Math.max(maxX, item.x);
+    minY = Math.min(minY, item.y); maxY = Math.max(maxY, item.y);
+  }
+  const axis = maxX - minX >= maxY - minY ? "x" : "y";
+  items.sort((a, b) => a[axis] - b[axis] ||
+    a.strokeIndex - b.strokeIndex || Number(a.reverse) - Number(b.reverse));
+  const middle = items.length >> 1, point = items[middle];
+  const left = buildEndpointTree(items.slice(0, middle));
+  const right = buildEndpointTree(items.slice(middle + 1));
+  return {
+    ...point, left, right,
+    minX: Math.min(point.x, left?.minX ?? Infinity, right?.minX ?? Infinity),
+    maxX: Math.max(point.x, left?.maxX ?? -Infinity, right?.maxX ?? -Infinity),
+    minY: Math.min(point.y, left?.minY ?? Infinity, right?.minY ?? Infinity),
+    maxY: Math.max(point.y, left?.maxY ?? -Infinity, right?.maxY ?? -Infinity)
+  };
+}
+
+function distanceToBounds(point: Point, node: EndpointNode): number {
+  const dx = point[0] < node.minX ? node.minX - point[0] : point[0] > node.maxX ? point[0] - node.maxX : 0;
+  const dy = point[1] < node.minY ? node.minY - point[1] : point[1] > node.maxY ? point[1] - node.maxY : 0;
+  return dx * dx + dy * dy;
+}
+
+interface NearestEndpoint {
+  strokeIndex: number;
+  reverse: boolean;
+  distanceSquared: number;
+}
+
+function findNearestEndpoint(
+  node: EndpointNode | null, cursor: Point, used: Uint8Array, best: NearestEndpoint
+): void {
+  if (!node || distanceToBounds(cursor, node) > best.distanceSquared) return;
+  if (!used[node.strokeIndex]) {
+    const dx = cursor[0] - node.x, dy = cursor[1] - node.y;
+    const squared = dx * dx + dy * dy;
+    if (squared < best.distanceSquared ||
+      (squared === best.distanceSquared &&
+        (node.strokeIndex < best.strokeIndex ||
+          (node.strokeIndex === best.strokeIndex && !node.reverse && best.reverse)))) {
+      best.strokeIndex = node.strokeIndex;
+      best.reverse = node.reverse;
+      best.distanceSquared = squared;
+    }
+  }
+  let first = node.left, second = node.right;
+  if (first && second && distanceToBounds(cursor, second) < distanceToBounds(cursor, first)) {
+    first = node.right; second = node.left;
+  }
+  findNearestEndpoint(first, cursor, used, best);
+  findNearestEndpoint(second, cursor, used, best);
+}
+
 export function routeElementStrokes(strokes: readonly StrokePath[], direction: Direction): StrokePath[] {
   if (strokes.length <= 1) {
     if (!strokes.length) return [];
@@ -13,28 +86,48 @@ export function routeElementStrokes(strokes: readonly StrokePath[], direction: D
     const reverse = direction === "rtl" ? b[0] > a[0] : b[0] < a[0];
     return [reverse ? { ...only, points: only.points.slice().reverse() } : { ...only, points: only.points.slice() }];
   }
-  const rtl = direction === "rtl", remaining = new Set(strokes.map((_, index) => index));
-  const ordered: StrokePath[] = [];
+
+  const rtl = direction === "rtl";
+  // Preserve the established first-stroke reading-direction heuristic.
   let firstIndex = -1, firstReverse = false, firstScore = Infinity;
   for (let index = 0; index < strokes.length; index++) for (const reverse of [false, true]) {
     const point = startEndpoint(strokes[index], reverse);
     const score = (rtl ? -point[0] : point[0]) * 10000 + point[1] * 0.01 + index * 1e-7;
     if (score < firstScore) { firstScore = score; firstIndex = index; firstReverse = reverse; }
   }
+
+  // The previous nearest-endpoint scan compared every remaining stroke after
+  // every selection (O(n²)). A balanced spatial index keeps large drawings
+  // responsive while preserving the same greedy nearest-endpoint route.
+  const endpoints: Endpoint[] = [];
+  for (let index = 0; index < strokes.length; index++) {
+    const points = strokes[index].points;
+    const first = points[0], last = points[points.length - 1];
+    endpoints.push(
+      { x: first[0], y: first[1], strokeIndex: index, reverse: false },
+      { x: last[0], y: last[1], strokeIndex: index, reverse: true }
+    );
+  }
+  const endpointTree = buildEndpointTree(endpoints);
+  const used = new Uint8Array(strokes.length);
+  used[firstIndex] = 1;
+  const ordered: StrokePath[] = [];
   const first = strokes[firstIndex];
   ordered.push(firstReverse ? { ...first, points: first.points.slice().reverse() } : { ...first, points: first.points.slice() });
-  remaining.delete(firstIndex);
+  let remaining = strokes.length - 1;
   let cursor = ordered[0].points[ordered[0].points.length - 1];
-  while (remaining.size) {
-    let chosen = -1, reverseChosen = false, bestDistance = Infinity;
-    for (const index of remaining) for (const reverse of [false, true]) {
-      const point = startEndpoint(strokes[index], reverse), d = distance(cursor, point);
-      if (d < bestDistance) { bestDistance = d; chosen = index; reverseChosen = reverse; }
-    }
-    const next = strokes[chosen];
-    const routed = reverseChosen ? { ...next, points: next.points.slice().reverse() } : { ...next, points: next.points.slice() };
+
+  while (remaining > 0) {
+    const nearest: NearestEndpoint = { strokeIndex: -1, reverse: false, distanceSquared: Infinity };
+    findNearestEndpoint(endpointTree, cursor, used, nearest);
+    if (nearest.strokeIndex < 0) throw new Error("Unable to route remaining stroke endpoints.");
+    const next = strokes[nearest.strokeIndex];
+    const routed = nearest.reverse
+      ? { ...next, points: next.points.slice().reverse() }
+      : { ...next, points: next.points.slice() };
     ordered.push(routed);
-    remaining.delete(chosen);
+    used[nearest.strokeIndex] = 1;
+    remaining--;
     cursor = routed.points[routed.points.length - 1];
   }
   return ordered;
