@@ -13,7 +13,9 @@ function setOperationStatus(label,done=0,total=1){
 }
 function clearOperationStatus(){const panel=el('operationStatus');if(panel)panel.hidden=true}
 function prewarmColorSchedules(items){
- const queue=[...items];let index=0;
+ // Warm only the first scene needed for the initial preview. Playback and export
+ // prepare the remaining scenes on demand rather than launching a long queue.
+ const queue=items.length?[items[0]]:[];let index=0;
  const warmNext=async()=>{
   if(index>=queue.length)return;
   const scene=queue[index++];
@@ -301,6 +303,7 @@ function updateBatchStatus(label,done,total){
 el('batchCancel').onclick=()=>{
  if(!activeImport)return;
  activeImport.cancelled=true;
+ RasmImageEngine.cancelPending?.('تم إلغاء تحليل الصورة بناءً على طلب المستخدم.');
  el('batchCancel').disabled=true;
  el('batchLabel').textContent='جارٍ إنهاء الصورة الحالية…';
 };
