@@ -414,7 +414,7 @@
     return { src, width, height, pixels: context.getImageData(0, 0, width, height).data };
   }
   function makeScene(name, source, result, handHint) {
-    const defaults = { speed: 0.5, mode: 'original', tone: 4, sourceHand: 'auto', handSize: 100,
+    const defaults = { speed: 0.2, handPaceVersion: 6, mode: 'original', tone: 4, sourceHand: 'auto', handSize: 100,
       weight: 1.4, side: '1', hold: 18, paper: '#ffffff', transition: 'cut' };
     return {
       name, src: source.src,
