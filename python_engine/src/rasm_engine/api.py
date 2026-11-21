@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import platform
+from importlib.util import find_spec
 from typing import Literal
 
 from fastapi import FastAPI
@@ -25,14 +26,7 @@ class CapabilitiesResponse(BaseModel):
     engine_version: str = __version__
     api_version: str = API_VERSION
     ready: bool = True
-    capabilities: list[str] = [
-        "runtime.health",
-        "runtime.capabilities",
-        "geometry.distance",
-        "geometry.bounds",
-        "geometry.path-length",
-        "geometry.simplify",
-    ]
+    capabilities: list[str]
     cpu_count: int = max(1, os.cpu_count() or 1)
     processing_operations: list[str] = []
 
@@ -54,5 +48,19 @@ def health() -> HealthResponse:
 
 @app.get("/v1/capabilities", response_model=CapabilitiesResponse)
 def capabilities() -> CapabilitiesResponse:
-    """List only the operations implemented by this package."""
-    return CapabilitiesResponse()
+    """Report the installed processing libraries without exposing job APIs."""
+    implemented = [
+        "runtime.health",
+        "runtime.capabilities",
+        "geometry.distance",
+        "geometry.bounds",
+        "geometry.path-length",
+        "geometry.simplify",
+    ]
+    if find_spec("numpy") is not None and find_spec("cv2") is not None:
+        implemented.extend([
+            "image.foreground-mask.rgba8",
+            "image.segmentation.connected-components-8",
+            "image.segmentation.small-mark-grouping",
+        ])
+    return CapabilitiesResponse(capabilities=implemented)

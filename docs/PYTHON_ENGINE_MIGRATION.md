@@ -3,12 +3,12 @@
 ## Architecture decision
 
 RASM remains a browser application. The browser owns interaction, canvas/GPU
-presentation, timeline controls, and playback. A local Python process will own
-CPU-heavy image and geometry work. The Python process is independent of the
-browser UI and exposes a versioned API.
+presentation, timeline controls, and playback. A local Python process owns
+CPU-heavy image and geometry work. Python is independent of the browser UI and
+exposes a versioned local API.
 
-The first Python foundation is under python_engine/. It does not replace or
-silently bypass Engine v2. The current TypeScript implementation remains the
+The Python package lives under `python_engine/`. It does not silently bypass
+or replace Engine v2. The current TypeScript implementation remains the
 reference implementation during migration.
 
 ## Non-negotiable invariants
@@ -24,10 +24,9 @@ reference implementation during migration.
 6. A migrated algorithm is not enabled by default until parity fixtures and
    real-project comparisons pass.
 7. The existing .rasm project format and old-project adapters remain stable.
-8. The local service must bind to loopback only. Before browser access is
-   enabled, implement pairing, request authentication, strict origin checks,
-   bounded payloads, and a safe local-origin/HTTPS strategy. Do not add
-   wildcard CORS.
+8. The local service binds to loopback only. Before browser access is enabled,
+   implement pairing, request authentication, strict origin checks, bounded
+   payloads, and a safe local-origin/HTTPS strategy. Do not add wildcard CORS.
 9. Python must not receive arbitrary filesystem paths from the page; the page
    transfers bytes, and file access stays behind explicit user actions.
 10. Measure wall time, peak memory, CPU time, output quality, and cancellation
@@ -35,7 +34,7 @@ reference implementation during migration.
 
 ## Migration sequence
 
-### Phase 0 — foundation (current PR)
+### Phase 0 — foundation (completed)
 
 - Establish a separately installable Python package and local-only FastAPI
   process.
@@ -43,15 +42,14 @@ reference implementation during migration.
 - Add a separate Python CI workflow.
 - Document the browser/Python ownership boundary and migration invariants.
 
-### Phase 1 — image normalization and segmentation
+### Phase 1 — image normalization and segmentation (in progress)
 
-- Define the canonical RGBA8 input contract, alpha/background rules, image-size
-  limits, and deterministic colour/threshold handling.
-- Add NumPy/OpenCV implementations behind explicit interfaces.
-- Port connected-component labelling and grouping.
-- Compare labels and component statistics with Engine v2 using fixed fixtures.
-- Include small marks, one-pixel details, transparent pixels, photographic
-  backgrounds, and large raster stress cases.
+- Define the canonical RGBA8 input contract and image-size validation.
+- Port the Engine v2 foreground/background threshold rules.
+- Use OpenCV 8-connected components with stable row-major component IDs.
+- Port detached small-mark grouping and photographic/high-density fallback.
+- Compare label and element outputs on deterministic fixtures.
+- Continue with contour/centreline extraction after segmentation parity.
 
 ### Phase 2 — vector extraction and geometry
 
@@ -79,7 +77,7 @@ reference implementation during migration.
 
 ### Phase 5 — migration and retirement
 
-- Run both engines against the same anonymized or synthetic fixtures.
+- Run both engines against the same fixtures.
 - Keep shadow-comparison results and performance baselines.
 - Enable Python by operation behind a feature flag only after quality and
   responsiveness acceptance.
@@ -88,7 +86,7 @@ reference implementation during migration.
 
 ## Acceptance gates
 
-A port is not accepted because the Python code runs. It must pass:
+A port is not accepted because Python code runs. It must pass:
 
 - Unit parity fixtures for normal, degenerate, and adversarial inputs.
 - Integration tests covering image analysis through final drawing plan.
@@ -101,5 +99,7 @@ A port is not accepted because the Python code runs. It must pass:
 
 ## Current status
 
-Phase 0 foundation only. The app still uses the TypeScript Engine v2 for all
-production processing. The Python service is not yet called by the editor.
+Phase 0 is complete. Phase 1 segmentation is now implemented in the Python
+package and has automated parity-oriented synthetic tests. The app still
+uses TypeScript Engine v2 for all production processing; the Python service is
+not yet called by the editor.
