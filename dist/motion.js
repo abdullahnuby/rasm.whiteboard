@@ -113,42 +113,68 @@ function fallbackShapeGroups(lines,width,height){
  }
  return groups
 }
+function fallbackElementStroke(shape){
+ const b=elementBounds(shape);
+ const width=Math.max(2,b.width),height=Math.max(2,b.height);
+ const cx=b.x+width/2,cy=b.y+height/2;
+ const points=width>=height
+  ?[[b.x+width*.15,cy],[cx,cy],[b.x+width*.85,cy]]
+  :[[cx,b.y+height*.15],[cx,cy],[cx,b.y+height*.85]];
+ return {points,color:'#29362e',synthetic:true};
+}
 function applyZones(scene){
- const center=scene.motionStyle!=='contour'&&Array.isArray(scene.centerBaseLines)&&scene.centerBaseLines.length>0;
- const source=center?scene.centerBaseLines:scene.baseLines;
- const all=center?scene.centerBaseLines:scene.baseLines;
+ const centerPreferred=scene.motionStyle!=='contour'&&Array.isArray(scene.centerBaseLines)&&scene.centerBaseLines.length>0;
+ const centerLines=centerPreferred?scene.centerBaseLines:[];
+ const contourLines=Array.isArray(scene.baseLines)?scene.baseLines:[];
  const direction=scene.elementDirection==='ltr'?'ltr':'rtl';
- const stored=center?scene.centerShapeGroups:scene.contourShapeGroups;
- const lineRasterOwnership=new Map();
- for(const shape of stored||[]){
-  const owner=shape.rasterLabels||[];
-  for(const index of shape.lineIndices||[])if(all[index])lineRasterOwnership.set(all[index],owner);
- }
- let groups=[];
- if(scene.shapeSequence!=='strokes'){
-  const available=new Set(source);
-  if(Array.isArray(stored)&&stored.length){
-   for(const shape of stored){
-    const lines=(shape.lineIndices||[]).map(index=>all[index]).filter(line=>line&&available.has(line));
+ const centerGroups=Array.isArray(scene.centerShapeGroups)?scene.centerShapeGroups:[];
+ const contourGroups=Array.isArray(scene.contourShapeGroups)?scene.contourShapeGroups:[];
+ const groupKey=shape=>(shape.rasterLabels||[]).join(',');
+ const contourByElement=new Map(contourGroups.filter(shape=>(shape.rasterLabels||[]).length).map(shape=>[groupKey(shape),shape]));
+ let groups=[],contourFallbacks=0,syntheticFallbacks=0,centerElements=0;
+ if(scene.shapeSequence==='strokes'){
+  const source=centerPreferred?centerLines:contourLines;
+  groups=source.map((line,index)=>({id:index+1,lines:[line],lineIndices:[index],bounds:null,area:0,rasterLabels:[],source:'individual-stroke'}));
+ }else if(centerPreferred){
+  for(const shape of centerGroups){
+   let lines=(shape.lineIndices||[]).map(index=>centerLines[index]).filter(Boolean);
+   let source=shape.source||'centerline';
+   if(lines.length)centerElements++;
+   else if((shape.rasterLabels||[]).length){
+    const fallback=contourByElement.get(groupKey(shape));
+    lines=(fallback?.lineIndices||[]).map(index=>contourLines[index]).filter(Boolean);
+    if(lines.length){source='contour-fallback';contourFallbacks++}
+   }
+   if(!lines.length&&(shape.rasterLabels||[]).length){
+    lines=[fallbackElementStroke(shape)];source='synthetic-component-sweep';syntheticFallbacks++;
+   }
+   groups.push({...shape,lines,source});
+  }
+  const assigned=new Set(groups.flatMap(group=>group.lines||[]));
+  for(const line of centerLines)if(!assigned.has(line)){
+   groups.push({id:groups.length+1,lines:[line],bounds:null,area:0,rasterLabels:[],source:'unassigned-centerline'})
+  }
+ }else{
+  const available=new Set(contourLines);
+  if(contourGroups.length){
+   for(const shape of contourGroups){
+    const lines=(shape.lineIndices||[]).map(index=>contourLines[index]).filter(line=>line&&available.has(line));
     lines.forEach(line=>available.delete(line));
-    if(lines.length||shape.area>0)groups.push({...shape,lines});
+    groups.push({...shape,lines});
    }
   }
   if(available.size)groups.push(...fallbackShapeGroups([...available],scene.src.width,scene.src.height));
- }else{
-  groups=source.map((line,index)=>({
-   id:index+1,lines:[line],lineIndices:[index],bounds:null,area:0,
-   rasterLabels:lineRasterOwnership.get(line)||[],source:'individual-stroke'
-  }));
  }
- if(!groups.length)groups=fallbackShapeGroups(source,scene.src.width,scene.src.height);
+ if(!groups.length)groups=fallbackShapeGroups(centerPreferred?centerLines:contourLines,scene.src.width,scene.src.height);
  groups=orderShapeGroups(groups,direction);
- // Explicit user zones override automatic element order.
+
+ // Manual zones apply to all routed paths, including contour and synthetic fallbacks.
  if(Array.isArray(scene.zones)&&scene.zones.length){
-  const remaining=new Set(source),manual=[];
+  const allLines=[...new Set(groups.flatMap(shape=>shape.lines||[]))];
+  const remaining=new Set(allLines),manual=[];
   for(let z=0;z<scene.zones.length;z++){
    const zone=scene.zones[z],picked=[];
-   for(const line of source){
+   for(const line of allLines){
     if(!remaining.has(line))continue;
     const [x,y]=lineCenter(line),nx=x/scene.src.width,ny=y/scene.src.height;
     if(nx>=zone.x&&ny>=zone.y&&nx<=zone.x+zone.w&&ny<=zone.y+zone.h){picked.push(line);remaining.delete(line)}
@@ -156,7 +182,7 @@ function applyZones(scene){
    if(picked.length)manual.push({
     id:'zone-'+(z+1),lines:picked,
     bounds:{x:zone.x*scene.src.width,y:zone.y*scene.src.height,width:zone.w*scene.src.width,height:zone.h*scene.src.height},
-    area:0,rasterLabels:[...new Set(picked.flatMap(line=>lineRasterOwnership.get(line)||[]))],source:'user-zone'
+    area:0,rasterLabels:[...new Set(groups.filter(shape=>(shape.lines||[]).some(line=>picked.includes(line))).flatMap(shape=>shape.rasterLabels||[]))],source:'user-zone'
    });
   }
   const rest=[];
@@ -165,23 +191,16 @@ function applyZones(scene){
    if(lines.length)rest.push({...shape,lines});
   }
   const assigned=new Set(rest.flatMap(shape=>shape.lines));
-  for(const line of remaining)if(!assigned.has(line))rest.push({
-   id:'remaining-'+rest.length,lines:[line],bounds:null,area:0,
-   rasterLabels:lineRasterOwnership.get(line)||[],source:'remaining-stroke'
-  });
+  for(const line of remaining)if(!assigned.has(line))rest.push({id:'remaining-'+rest.length,lines:[line],bounds:null,area:0,rasterLabels:[],source:'remaining-stroke'});
   groups=[...manual,...rest];
  }
  let start=0;
  scene.shapeGroups=[];scene.lines=[];
  groups.forEach((shape,index)=>{
   const routed=routeStrokes(shape.lines||[],direction),pathStart=start;
-  for(const line of routed){
-   const result={...line,start,shapeId:index+1};
-   scene.lines.push(result);start+=line.points.length;
-  }
+  for(const line of routed){const result={...line,start,shapeId:index+1};scene.lines.push(result);start+=line.points.length}
   let travelLength=0;
-  for(const line of routed)for(let i=1;i<line.points.length;i++)
-   travelLength+=Math.hypot(line.points[i][0]-line.points[i-1][0],line.points[i][1]-line.points[i-1][1]);
+  for(const line of routed)for(let i=1;i<line.points.length;i++)travelLength+=Math.hypot(line.points[i][0]-line.points[i-1][0],line.points[i][1]-line.points[i-1][1]);
   const bounds=elementBounds({...shape,lines:routed});
   scene.shapeGroups.push({
    id:index+1,name:shape.name||('عنصر '+(index+1)),bounds,area:shape.area||0,
@@ -189,11 +208,12 @@ function applyZones(scene){
    rasterComponentLabels:[...(shape.rasterLabels||[])],source:shape.source||'detected-element'
   });
  });
- scene.length=start;scene.usingCenterline=center;
- scene.elementDirection=direction;
- scene.shapeMetrics={...(scene.shapeMetrics||{}),sequence:scene.shapeSequence||'smart',
-  direction,orderedElements:scene.shapeGroups.length,
-  elementsWithPaths:scene.shapeGroups.filter(group=>group.pathCount>0).length};
+ scene.length=start;scene.usingCenterline=centerPreferred;scene.elementDirection=direction;
+ scene.shapeMetrics={...(scene.shapeMetrics||{}),sequence:scene.shapeSequence||'smart',direction,
+  orderedElements:scene.shapeGroups.length,
+  elementsWithPaths:scene.shapeGroups.filter(group=>group.pathCount>0).length,
+  centerlineElements:centerElements,contourFallbackElements:contourFallbacks,
+  syntheticFallbackElements:syntheticFallbacks};
 }
 // Map each source pixel to a reveal time. Interior pixels follow their
 // nearest traced edge, so solid fills retain their original RGB values.
