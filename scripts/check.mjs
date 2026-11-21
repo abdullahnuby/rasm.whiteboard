@@ -49,3 +49,5 @@ assert.ok(appSource.includes('cancelPending?.'), 'Batch cancellation must stop t
 assert.ok(appSource.includes('items.length?[items[0]]:[]'), 'Initial prewarming must not schedule all imported scenes at once');
 assert.ok(appSource.includes('await applyZones(scene)'), 'Import must await Worker-based planning');
 assert.ok(appSource.includes('تفاصيل أول الأخطاء'), 'Import failures must display actionable causes');
+assert.ok(appSource.includes('توقفت المعاينة بسبب خطأ في محرك الرسم'), 'Playback render failures must be displayed instead of silently stopping');
+assert.ok(projectSource.includes('تعذّر قراءة النسخة:'), 'Project restore must display the underlying engine error');
