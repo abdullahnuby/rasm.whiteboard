@@ -13,7 +13,7 @@ export interface ElementRecord {
 }
 export interface StrokePath {
   id?: string; points: Point[]; source?: StrokeSource; color?: string;
-  componentId?: number; elementId?: number; start?: number; shapeId?: number; synthetic?: boolean;
+  componentId?: number; elementId?: number; start?: number; shapeId?: number; synthetic?: boolean; cumulative?: Float32Array;
 }
 export interface RasterAnalysis {
   schemaVersion: 2; width: number; height: number; rasterLabels: Uint32Array;
