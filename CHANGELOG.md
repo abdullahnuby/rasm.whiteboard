@@ -3,6 +3,7 @@
 - Add Paper.js 0.17.0 vector geometry refinement for centerline and contour path simplification.
 - Group disconnected glyph parts and nearby marks into shape-level units, then route strokes inside each shape before advancing to the next.
 - Export compact per-pixel shape ownership labels and isolate raster reveal propagation inside the owning shape.
+- Give each shape a reveal window that begins when the hand arrives and finishes only at the end of that shape's last stroke; start the next shape after pen-lift travel.
 - Add a per-scene sequence control: smart shape grouping or individual stroke sequencing. Preserve the setting in .rasm projects.
 - Vendor pinned browser engines into dist/vendor during build and include third-party license notices and asset hashes.
 
