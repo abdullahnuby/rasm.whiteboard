@@ -14,7 +14,12 @@ function setOperationStatus(label,done=0,total=1){
 function clearOperationStatus(){const panel=el('operationStatus');if(panel)panel.hidden=true}
 function prewarmColorSchedules(items){
  const queue=[...items];let index=0;
- const warmNext=()=>{if(index>=queue.length)return;colorSchedule(queue[index++]);setTimeout(warmNext,0)};
+ const warmNext=()=>{
+  if(index>=queue.length)return;
+  const scene=queue[index++];
+  try{colorSchedule(scene)}catch(error){scene.engineScheduleError=String(error.message||error)}
+  setTimeout(warmNext,0);
+ };
  setTimeout(warmNext,0);
 }
 function path(c,points,ink,width=1.4){c.beginPath();c.moveTo(...points[0]);for(let i=1;i<points.length;i++)c.lineTo(...points[i]);c.strokeStyle=ink;c.lineWidth=width;c.lineJoin=c.lineCap='round';c.stroke()}
@@ -74,12 +79,18 @@ function render(t){
    else break;
   }
  }
- if(original&&!cache.pixels){
-  const plan=colorSchedule(s);
-  if(plan){
-   const data=s.src.getContext('2d').getImageData(0,0,s.src.width,s.src.height);
-   const image=cache.c.createImageData(s.src.width,s.src.height);
-   cache.pixels={...plan,source:new Uint32Array(data.data.buffer),output:new Uint32Array(image.data.buffer),image,count:0};
+ if(original&&!cache.pixels&&!s.engineScheduleError){
+  try{
+   const plan=colorSchedule(s);
+   if(plan){
+    const data=s.src.getContext('2d').getImageData(0,0,s.src.width,s.src.height);
+    const image=cache.c.createImageData(s.src.width,s.src.height);
+    cache.pixels={...plan,source:new Uint32Array(data.data.buffer),output:new Uint32Array(image.data.buffer),image,count:0};
+   }
+  }catch(error){
+   s.engineScheduleError=String(error.message||error);
+   refreshEngineDiagnostics(s);
+   el('msg').textContent='خطأ في خطة رسم المشهد: '+s.engineScheduleError;
   }
  }
  if(original&&cache.pixels){
@@ -206,6 +217,7 @@ function refreshEngineDiagnostics(scene){
   'مكونات بلا مسار قلم: '+(plan.componentsWithoutStrokes??'—'),
   'بكسلات بلا توقيت: '+(plan.rasterPixelsWithoutSeed??'—')
  ];
+ if(scene.engineScheduleError)rows.push('خطأ الجدولة: '+scene.engineScheduleError);
  if(warnings.length)rows.push('تحذيرات:\n'+warnings.join('\n'));
  el('engineDiagnosticsText').textContent=rows.join('\n');
 }
