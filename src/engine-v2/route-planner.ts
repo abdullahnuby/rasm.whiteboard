@@ -138,7 +138,16 @@ function makeRows<T extends { bounds: Rect }>(items: T[]): T[][] {
   const rows: Array<{ cy: number; height: number; items: T[] }> = [];
   for (const item of sorted) {
     const threshold = Math.max(7, Math.min(30, Math.max(10, item.bounds.height) * 0.48));
-    let row = rows.find(candidate => Math.abs(candidate.cy - item.bounds.cy) <= Math.max(threshold, candidate.height * 0.42));
+    let row: { cy: number; height: number; items: T[] } | undefined;
+    // Rows are created in sorted Y order. Search backwards and stop once the
+    // current item is below every remaining row's maximum matching distance.
+    for (let index = rows.length - 1; index >= 0; index--) {
+      const candidate = rows[index];
+      const allowed = Math.max(threshold, candidate.height * 0.42);
+      const delta = item.bounds.cy - candidate.cy;
+      if (delta > allowed) break;
+      if (delta >= 0) { row = candidate; break; }
+    }
     if (!row) { row = { cy: item.bounds.cy, height: item.bounds.height, items: [] }; rows.push(row); }
     row.items.push(item);
     const count = row.items.length;
