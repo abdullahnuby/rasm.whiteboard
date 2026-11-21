@@ -249,7 +249,7 @@ function buildColorSchedule(scene){
    for(const group of scene.shapeGroups){
     const owned=travel.segments.filter(segment=>segment.line.shapeId===group.id);
     if(!owned.length)continue;
-    windows.set(group.id,{start:owned[0].begin/travel.end,end:owned[owned.length-1].end/travel.end});
+    windows.set(group.id,{start:owned[0].draw/travel.end,end:owned[owned.length-1].end/travel.end});
    }
    const labelWindows=new Map();
    for(const group of scene.shapeGroups){
