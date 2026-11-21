@@ -1,0 +1,55 @@
+name: RASM Engine v2 CI
+
+on:
+  push:
+    branches:
+      - architecture/rasm-engine-v2
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rasm-engine-v2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  engine-and-editor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: TypeScript contracts
+        run: npm run typecheck
+
+      - name: Engine v2 unit and integration tests
+        run: npm run test:engine-v2
+
+      - name: Full application build and regression suite
+        run: npm run build
+
+      - name: Publish Engine v2 build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rasm-engine-v2-build-${{ github.sha }}
+          path: |
+            dist/engine-v2.js
+            dist/engine-v2.js.map
+            dist/vendor/dependencies.json
+            dist/vendor/THIRD-PARTY-LICENSES.md
+          if-no-files-found: warn
+          retention-days: 14
