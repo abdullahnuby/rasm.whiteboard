@@ -88,7 +88,7 @@ function render(t){
  }
  cache.t=target;const sc=Math.min(W/s.src.width,H/s.src.height)*.96,ox=(W-sc*s.src.width)/2,oy=(H-sc*s.src.height)/2;
  ctx.save();ctx.translate(ox,oy);ctx.scale(sc,sc);ctx.drawImage(cache.lay,0,0);
- if(original&&!cache.pixels){const reveal=Math.min(1,frac);ctx.save();ctx.beginPath();ctx.rect(0,0,s.src.width,s.src.height*reveal);ctx.clip();ctx.drawImage(s.src,0,0);ctx.restore()}
+ // No global image wipe: wait for the element-aware pixel schedule.
  tip=frac<1||mode!=='original'?motion.tip||null:null;
  if(!tip && original && !s.length && frac<1 && cache.pixels){
   const pixels=cache.pixels;
