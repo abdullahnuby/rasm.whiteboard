@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
-const core=vm.runInNewContext((await readFile('dist/motion.js','utf8'))+';({edgeSkinRegion,overlayEnabled,applyZones,sceneSeconds,strokeProgress})');
+const core=vm.runInNewContext((await readFile('dist/motion.js','utf8'))+';({edgeSkinRegion,overlayEnabled,applyZones,sceneSeconds,strokeProgress,strokeTravelPlan,strokeRevealTime})');
 const pixels=new Uint8ClampedArray(100*100*4).fill(255);
 assert.equal(core.edgeSkinRegion(pixels,100,100),false);
 for(let y=30;y<100;y++)for(let x=42;x<68;x++)pixels.set([163,109,82,255],(y*100+x)*4);
@@ -83,6 +83,13 @@ const middle=core.strokeProgress(uneven,.5);
 assert.ok(Math.abs(middle.tip[0]-50.5)<1e-6);
 const near=core.strokeProgress(uneven,.01);
 assert.ok(near.target<2,'Dense and sparse sections must use arc length');
+assert.ok(Math.abs(middle.progress-.5)<1e-9&&Math.abs(near.progress-.01)<1e-9,
+ 'Hand progress must expose the same normalized physical travel used by image reveal');
+const unevenPlan=core.strokeTravelPlan(uneven.lines);
+assert.equal(unevenPlan.end,101);
+assert.equal(core.strokeRevealTime(unevenPlan.segments[0],1,unevenPlan.end),2);
+assert.equal(core.strokeRevealTime(unevenPlan.segments[0],2,unevenPlan.end),227,
+ 'Pixel reveal timing must follow physical path distance, not point index');
 const routed=vm.runInNewContext((await readFile('dist/motion.js','utf8'))+';routeStrokes');
 const far={points:[[90,0],[100,0]]},close={points:[[12,0],[20,0]]},origin={points:[[0,0],[10,0]]};
 const route=routed([origin,far,close]);
