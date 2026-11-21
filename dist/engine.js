@@ -404,11 +404,16 @@
     return { src, width, height, pixels: context.getImageData(0, 0, width, height).data };
   }
   function makeScene(name, source, result, handHint) {
-    const defaults = { speed: 0.5, mode: 'original', tone: 4, sourceHand: 'auto', handSize: 100,
-      weight: 1.4, side: '1', hold: 18, paper: '#ffffff', transition: 'cut' };
+    const defaults = { speed: 0.2, mode: 'original', tone: 4, sourceHand: 'auto', handSize: 100,
+      weight: 1.4, side: '1', hold: 18, paper: '#ffffff', transition: 'cut', elementDirection: 'rtl' };
+    const pixels = source.pixels?.length === source.width * source.height * 4
+      ? source.pixels
+      : source.src.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, source.width, source.height).data;
+    const engineAnalysisV2 = result.engineAnalysisV2 ||
+      root.RasmWhiteboardCore.analyzeRaster(pixels, source.width, source.height);
     return { name, src: source.src, baseLines: result.lines, centerBaseLines: result.centerLines || [], centerMetrics: result.centerMetrics || null, motionStyle: 'smart', zones: [], handHint: !!handHint,
       thumb: source.src.toDataURL('image/jpeg', 0.65), lines: result.centerLines && result.centerLines.length ? result.centerLines : result.lines, length: result.centerLines && result.centerLines.length ? result.centerLength : result.length,
-      duration: 10, engineVersion: 4, metrics: result.metrics, ...defaults };
+      duration: 10, engineVersion: 6, engineAnalysisV2, enginePlanV2: null, engineDiagnostics: engineAnalysisV2.diagnostics, ...defaults };
   }
 
   let worker = null, requestId = 0;
