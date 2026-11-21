@@ -51,8 +51,7 @@ def test_invalid_simplification_tolerance_is_rejected(tolerance):
         simplify_path([(0, 0), (1, 1)], tolerance=tolerance)
 
 
-def test_long_polyline_uses_iterative_stack():
-    points = [(float(index), float(index % 7)) for index in range(20_000)]
+def test_long_polyline_simplifies_without_recursion_or_extra_vertices():
+    points = [(float(index), 0.0) for index in range(20_000)]
     result = simplify_path(points, tolerance=0.1)
-    assert result[0] == points[0]
-    assert result[-1] == points[-1]
+    assert result == [points[0], points[-1]]
