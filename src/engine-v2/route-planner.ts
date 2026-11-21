@@ -1,4 +1,4 @@
-import { boundsOfPoints, distance, pathLength } from "./geometry.js";
+import { boundsOfPoints, distance } from "./geometry.js";
 import type { Direction, ElementPlan, ElementRecord, Point, Rect, StrokePath } from "./types.js";
 
 function startEndpoint(stroke: StrokePath, reverse: boolean): Point {
@@ -94,10 +94,16 @@ export function finalizeElements(
     for (const stroke of strokes) {
       const first = stroke.points[0], last = stroke.points[stroke.points.length - 1];
       if (previous) travelled += distance(previous, first); // pen-up travel consumes time but draws nothing
-      travelled += pathLength(stroke.points);
+      // Precompute per-stroke distance samples in the Worker. The animation
+      // thread can then find the pen position without rebuilding O(points) tables.
+      const cumulative = new Float32Array(stroke.points.length);
+      for (let index = 1; index < stroke.points.length; index++) {
+        cumulative[index] = cumulative[index - 1] + distance(stroke.points[index - 1], stroke.points[index]);
+      }
+      travelled += cumulative[cumulative.length - 1] || 0;
       const finalized: StrokePath = {
         ...stroke, elementId: element.id, shapeId: element.id,
-        start: pointOffset
+        start: pointOffset, cumulative
       };
       lines.push(finalized);
       pointOffset += stroke.points.length;
