@@ -93,7 +93,8 @@ assert.equal(core.strokeRevealTime(unevenPlan.segments[0],2,unevenPlan.end),227,
 const routed=vm.runInNewContext((await readFile('dist/motion.js','utf8'))+';routeStrokes');
 const far={points:[[90,0],[100,0]]},close={points:[[12,0],[20,0]]},origin={points:[[0,0],[10,0]]};
 const route=routed([origin,far,close]);
-assert.equal(route[1].points,close.points,'Nearby strokes must precede distant strokes');
+assert.deepEqual(Array.from(route[1].points[0]),[20,0],'The next stroke should begin at the endpoint nearest the previous stroke');
+assert.deepEqual(Array.from(route[1].points.at(-1)),[12,0]);
 const horizontalLeft={id:'left',points:[[0,0],[10,0]]},horizontalRight={id:'right',points:[[90,0],[100,0]]};
 const rtlRoute=core.routeStrokes([horizontalLeft,horizontalRight],'rtl');
 const ltrRoute=core.routeStrokes([horizontalLeft,horizontalRight],'ltr');
