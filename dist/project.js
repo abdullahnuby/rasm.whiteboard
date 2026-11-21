@@ -212,7 +212,7 @@ async function readProject(p){
    paper:/^#[a-f0-9]{6}$/i.test(row.paper)?row.paper:'#ffffff',
    transition:choose(row.transition,['cut','fade'],'cut')
   });
-  applyZones(s);restored.push(s);setOperationStatus('إعادة تحليل المشاهد · '+(sceneIndex+1)+' / '+p.scenes.length,sceneIndex+1,p.scenes.length);
+  await applyZones(s);restored.push(s);setOperationStatus('إعادة تحليل المشاهد · '+(sceneIndex+1)+' / '+p.scenes.length,sceneIndex+1,p.scenes.length);
  }
  let audio=null;
  if(p.audio){
