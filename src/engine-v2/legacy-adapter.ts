@@ -43,6 +43,7 @@ export function applyToLegacyScene(scene: LegacyScene, precomputedAnalysis?: Ras
   scene.engineAnalysisV2 = analysis;
   scene.enginePlanV2 = plan;
   scene.engineDiagnostics = plan.diagnostics;
+  scene.engineScheduleError = undefined;
   scene.rasterLabels = plan.rasterLabels;
   scene.lines = plan.lines;
   scene.length = plan.length;
