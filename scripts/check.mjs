@@ -16,6 +16,14 @@ for (const file of ['app.js', 'project.js', 'zones.js', 'shape-engine.js', 'engi
 }
 assert.ok(html.includes('id="speedHint"'), 'Speed duration guidance must be present');
 assert.ok(html.includes('value="0.1"'), 'Very slow hand-speed preset must be available');
+assert.ok(html.includes('value="0.2"'), 'Slower default hand speed must be available');
+const appSource = await readFile('dist/app.js', 'utf8');
+assert.ok(!appSource.includes('frac/.86') && !appSource.includes('frac/.96'), 'Hand and image reveal must not use separate delayed clocks');
+assert.ok(appSource.includes('strokeProgress(s,frac)'), 'Hand must use the same progress clock as the image reveal');
+assert.ok(appSource.includes('revealPixels(cache.pixels,reveal)'), 'Original image reveal must follow hand progress directly');
+const projectSource = await readFile('dist/project.js', 'utf8');
+assert.ok(projectSource.includes('handPaceVersion'), 'New slow drawing pace must persist in project files');
+
 assert.ok(html.includes('id="shapeSequence"'), 'Shape-level sequencing control must be available');
 assert.ok(html.includes('id="elementDirection"'), 'Element direction selector must be available');
 assert.ok(html.includes('value="rtl">من اليمين إلى الشمال'), 'Arabic default direction must be RTL');
