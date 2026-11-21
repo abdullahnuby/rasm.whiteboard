@@ -1,3 +1,10 @@
+# 5.2.3 — Enclosure-based element grouping and consistent pixel connectivity
+- Change component grouping so disconnected marks are combined only when they are small aligned diacritics, lie inside an enclosing outline, or overlap strongly in both axes.
+- Stop merging unrelated neighbouring objects merely because their bounding boxes have close horizontal or vertical projections.
+- Preserve nested illustration content (icons inside clouds, bubbles and badges) as one drawable element while leaving nearby outside text/objects independent.
+- Change raster reveal flood fill to 8-neighbour connectivity, matching OpenCV connected-component segmentation and preventing diagonal fragments from being deferred to the end of an element.
+- Add regression tests for an enclosing outline with interior marks next to an independent object, and for diagonal-only raster connectivity.
+
 # 5.2.2 — Exact hand-to-element reveal synchronization and slower default pace
 - Remove the trailing 10% reveal phase that allowed image pixels to continue appearing after the hand had completed its route.
 - Drive original-image reveal directly from the same normalized physical progress used by the hand, without independent .86/.96 timing multipliers.
