@@ -24,7 +24,7 @@ test("a vector path crossing two components is split by pixel ownership", () => 
     source: "segmented", tracedComponentIds: [], warnings: []
   }}));
   const result = assignPathsToElements([
-    { points: [[4, 9], [9, 9], [15, 9], [22, 9], [29, 9], [35, 9], [43, 9] }
+    { points: [[4, 9], [9, 9], [15, 9], [22, 9], [29, 9], [35, 9], [43, 9]] }
   ], analysis.rasterLabels, width, height, elements, analysis.components, "centerline");
   assert.equal(result.byElement.size, 2);
   assert.equal(result.assignedPaths, 2);
