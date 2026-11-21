@@ -34,36 +34,63 @@ function principalStrokes(lines,width,height){
  }
  return lines.filter((_,index)=>chosen.has(index))
 }
-function routeStrokes(lines){
- if(lines.length<2)return lines;
- const size=48,buckets=new Map(),remaining=new Set(lines.map((_,i)=>i));
- const key=p=>Math.floor(p[0]/size)+','+Math.floor(p[1]/size);
- lines.forEach((line,index)=>{for(const p of [line.points[0],line.points.at(-1)]){
-  const k=key(p);if(!buckets.has(k))buckets.set(k,[]);buckets.get(k).push(index)
- }});
- const ordered=[];let point=lines[0].points[0];
+function routeStrokes(lines,direction='rtl'){
+ if(lines.length<2){
+  if(!lines.length)return [];
+  const only=lines[0],points=only.points||[];
+  if(points.length<2)return lines;
+  const reverse=direction==='rtl'?points.at(-1)[0]>points[0][0]:points.at(-1)[0]<points[0][0];
+  return [reverse?{...only,points:points.slice().reverse()}:only];
+ }
+ const rtl=direction!=='ltr',remaining=new Set(lines.map((_,i)=>i)),ordered=[];
+ const leadScore=p=>rtl?-p[0]:p[0];
+ const endpoint=(line,reverse)=>reverse?line.points.at(-1):line.points[0];
+ let firstIndex=-1,firstReverse=false,firstScore=Infinity;
+ for(let i=0;i<lines.length;i++)for(const reverse of [false,true]){
+  const p=endpoint(lines[i],reverse),score=leadScore(p)*10000+p[1]*.01+i*.000001;
+  if(score<firstScore){firstScore=score;firstIndex=i;firstReverse=reverse}
+ }
+ let currentLine=lines[firstIndex],current=endpoint(currentLine,!firstReverse);
+ remaining.delete(firstIndex);
+ ordered.push(firstReverse?{...currentLine,points:currentLine.points.slice().reverse()}:currentLine);
  while(remaining.size){
-  const bx=Math.floor(point[0]/size),by=Math.floor(point[1]/size);
-  let candidate=-1,distance=Infinity,reverse=false;
-  for(let ring=0;ring<4&&candidate<0;ring++){
-   for(let x=-ring;x<=ring;x++)for(let y=-ring;y<=ring;y++){
-    if(Math.max(Math.abs(x),Math.abs(y))!==ring)continue;
-    for(const index of buckets.get((bx+x)+','+(by+y))||[]){
-     if(!remaining.has(index))continue;
-     const line=lines[index];
-     for(const flip of [false,true]){
-      const p=flip?line.points.at(-1):line.points[0],d=Math.hypot(p[0]-point[0],p[1]-point[1]);
-      if(d<distance){candidate=index;distance=d;reverse=flip}
-     }
+  let candidate=-1,reverse=false,bestDistance=Infinity,bestLead=Infinity;
+  for(const index of remaining){
+   const line=lines[index];
+   for(const flip of [false,true]){
+    const p=endpoint(line,flip),d=Math.hypot(p[0]-current[0],p[1]-current[1]),lead=leadScore(p);
+    if(d<bestDistance-1e-6||(Math.abs(d-bestDistance)<=1e-6&&lead<bestLead)){
+     candidate=index;reverse=flip;bestDistance=d;bestLead=lead
     }
    }
   }
-  if(candidate<0)candidate=remaining.values().next().value;
-  remaining.delete(candidate);const line=lines[candidate];
-  const next=reverse?{...line,points:line.points.slice().reverse()}:line;
-  ordered.push(next);point=next.points.at(-1)
+  remaining.delete(candidate);
+  const line=lines[candidate],next=reverse?{...line,points:line.points.slice().reverse()}:line;
+  ordered.push(next);current=next.points.at(-1)
  }
  return ordered
+}
+function elementBounds(shape){
+ if(shape.bounds&&Number.isFinite(shape.bounds.x))return shape.bounds;
+ const points=(shape.lines||[]).flatMap(line=>line.points||[]);
+ if(!points.length)return {x:0,y:0,width:0,height:0,cx:0,cy:0};
+ let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+ for(const point of points){minX=Math.min(minX,point[0]);minY=Math.min(minY,point[1]);maxX=Math.max(maxX,point[0]);maxY=Math.max(maxY,point[1])}
+ return {x:minX,y:minY,width:maxX-minX,height:maxY-minY,cx:(minX+maxX)/2,cy:(minY+maxY)/2}
+}
+function orderShapeGroups(groups,direction='rtl'){
+ if(groups.length<2)return groups;
+ const prepared=groups.map((shape,index)=>({shape,index,b:elementBounds(shape)})).sort((a,b)=>a.b.cy-b.b.cy);
+ const rows=[];
+ for(const item of prepared){
+  const b=item.b,threshold=Math.max(7,Math.min(26,Math.max(10,b.height)*.48));
+  let row=rows.find(candidate=>Math.abs(candidate.cy-b.cy)<=Math.max(threshold,candidate.height*.42));
+  if(!row){row={cy:b.cy,height:b.height,items:[]};rows.push(row)}
+  row.items.push(item);row.cy=(row.cy*(row.items.length-1)+b.cy)/row.items.length;row.height=Math.max(row.height,b.height)
+ }
+ rows.sort((a,b)=>a.cy-b.cy);
+ const rtl=direction!=='ltr';
+ return rows.flatMap(row=>row.items.sort((a,b)=>(rtl?b.b.cx-a.b.cx:a.b.cx-b.b.cx)||a.index-b.index).map(item=>item.shape))
 }
 function lineCenter(line){
  const points=line.points||[];
@@ -73,24 +100,32 @@ function lineCenter(line){
  return [x/count,y/count]
 }
 function fallbackShapeGroups(lines,width,height){
- const groups=[],gap=Math.max(12,Math.min(width,height)*.035);
+ const groups=[],gap=Math.max(4,Math.min(9,Math.min(width,height)*.012));
  for(let index=0;index<lines.length;index++){
   const line=lines[index],center=lineCenter(line);
   let chosen=null,best=Infinity;
-  for(const group of groups){const d=Math.hypot(group.center[0]-center[0],group.center[1]-center[1]);if(d<best){best=d;chosen=group}}
-  if(chosen&&best<=gap){chosen.lineIndices.push(index);const n=chosen.lineIndices.length;chosen.center=[(chosen.center[0]*(n-1)+center[0])/n,(chosen.center[1]*(n-1)+center[1])/n]}
-  else groups.push({id:groups.length+1,lineIndices:[index],center,bounds:null,area:0,source:'path-cluster'})
+  for(const group of groups){
+   const b=elementBounds(group),d=Math.hypot(b.cx-center[0],b.cy-center[1]);
+   if(d<best){best=d;chosen=group}
+  }
+  if(chosen&&best<=gap){chosen.lines.push(line)}
+  else groups.push({id:groups.length+1,lines:[line],lineIndices:[index],bounds:null,area:0,componentLabels:[],rasterLabels:[],source:'unassigned-path'})
  }
  return groups
 }
 function applyZones(scene){
  const center=scene.motionStyle!=='contour'&&Array.isArray(scene.centerBaseLines)&&scene.centerBaseLines.length>0;
- let source=center?scene.centerBaseLines:scene.baseLines;
- if(scene.motionStyle!=='contour'&&scene.mode==='original')source=principalStrokes(source,scene.src.width,scene.src.height);
+ const source=center?scene.centerBaseLines:scene.baseLines;
  const all=center?scene.centerBaseLines:scene.baseLines;
+ const direction=scene.elementDirection==='ltr'?'ltr':'rtl';
+ const stored=center?scene.centerShapeGroups:scene.contourShapeGroups;
+ const lineRasterOwnership=new Map();
+ for(const shape of stored||[]){
+  const owner=shape.rasterLabels||[];
+  for(const index of shape.lineIndices||[])if(all[index])lineRasterOwnership.set(all[index],owner);
+ }
  let groups=[];
  if(scene.shapeSequence!=='strokes'){
-  const stored=center?scene.centerShapeGroups:scene.contourShapeGroups;
   const available=new Set(source);
   if(Array.isArray(stored)&&stored.length){
    for(const shape of stored){
@@ -99,13 +134,16 @@ function applyZones(scene){
     if(lines.length||shape.area>0)groups.push({...shape,lines});
    }
   }
-  if(available.size){
-   const fallback=fallbackShapeGroups([...available],scene.src.width,scene.src.height);
-   for(const item of fallback)groups.push({...item,lines:item.lineIndices.map(index=>[...available][index])});
-  }
- }else groups=source.map((line,index)=>({id:index+1,lineIndices:[index],lines:[line],bounds:null,area:0,source:'individual-stroke'}));
- if(!groups.length)groups=fallbackShapeGroups(source,scene.src.width,scene.src.height).map(group=>({...group,lines:group.lineIndices.map(index=>source[index])}));
- // Explicit user zones override automatic object grouping and are played first in the drawn order.
+  if(available.size)groups.push(...fallbackShapeGroups([...available],scene.src.width,scene.src.height));
+ }else{
+  groups=source.map((line,index)=>({
+   id:index+1,lines:[line],lineIndices:[index],bounds:null,area:0,
+   rasterLabels:lineRasterOwnership.get(line)||[],source:'individual-stroke'
+  }));
+ }
+ if(!groups.length)groups=fallbackShapeGroups(source,scene.src.width,scene.src.height);
+ groups=orderShapeGroups(groups,direction);
+ // Explicit user zones override automatic element order.
  if(Array.isArray(scene.zones)&&scene.zones.length){
   const remaining=new Set(source),manual=[];
   for(let z=0;z<scene.zones.length;z++){
@@ -115,7 +153,11 @@ function applyZones(scene){
     const [x,y]=lineCenter(line),nx=x/scene.src.width,ny=y/scene.src.height;
     if(nx>=zone.x&&ny>=zone.y&&nx<=zone.x+zone.w&&ny<=zone.y+zone.h){picked.push(line);remaining.delete(line)}
    }
-   if(picked.length)manual.push({id:'zone-'+(z+1),lines:picked,bounds:{x:zone.x*scene.src.width,y:zone.y*scene.src.height,width:zone.w*scene.src.width,height:zone.h*scene.src.height},area:0,source:'user-zone'});
+   if(picked.length)manual.push({
+    id:'zone-'+(z+1),lines:picked,
+    bounds:{x:zone.x*scene.src.width,y:zone.y*scene.src.height,width:zone.w*scene.src.width,height:zone.h*scene.src.height},
+    area:0,rasterLabels:[...new Set(picked.flatMap(line=>lineRasterOwnership.get(line)||[]))],source:'user-zone'
+   });
   }
   const rest=[];
   for(const shape of groups){
@@ -123,32 +165,36 @@ function applyZones(scene){
    if(lines.length)rest.push({...shape,lines});
   }
   const assigned=new Set(rest.flatMap(shape=>shape.lines));
-  for(const line of remaining)if(!assigned.has(line))rest.push({id:'remaining-'+rest.length,lines:[line],bounds:null,area:0,source:'remaining-stroke'});
+  for(const line of remaining)if(!assigned.has(line))rest.push({
+   id:'remaining-'+rest.length,lines:[line],bounds:null,area:0,
+   rasterLabels:lineRasterOwnership.get(line)||[],source:'remaining-stroke'
+  });
   groups=[...manual,...rest];
  }
  let start=0;
- scene.shapeGroups=[];
- scene.lines=[];
+ scene.shapeGroups=[];scene.lines=[];
  groups.forEach((shape,index)=>{
-  const routed=routeStrokes(shape.lines||[]);
-  const pathStart=start;
+  const routed=routeStrokes(shape.lines||[],direction),pathStart=start;
   for(const line of routed){
    const result={...line,start,shapeId:index+1};
    scene.lines.push(result);start+=line.points.length;
   }
   let travelLength=0;
-  for(const line of routed)for(let i=1;i<line.points.length;i++)travelLength+=Math.hypot(line.points[i][0]-line.points[i-1][0],line.points[i][1]-line.points[i-1][1]);
+  for(const line of routed)for(let i=1;i<line.points.length;i++)
+   travelLength+=Math.hypot(line.points[i][0]-line.points[i-1][0],line.points[i][1]-line.points[i-1][1]);
+  const bounds=elementBounds({...shape,lines:routed});
   scene.shapeGroups.push({
-   id:index+1,name:shape.name||('شكل '+(index+1)),bounds:shape.bounds||null,
-   area:shape.area||0,pathCount:routed.length,pathStart,pathEnd:start,
-   travelLength,rasterComponentLabels:[...(shape.componentLabels||[])],
-   source:shape.source||'detected-component'
+   id:index+1,name:shape.name||('عنصر '+(index+1)),bounds,area:shape.area||0,
+   pathCount:routed.length,pathStart,pathEnd:start,travelLength,
+   rasterComponentLabels:[...(shape.rasterLabels||[])],source:shape.source||'detected-element'
   });
  });
  scene.length=start;scene.usingCenterline=center;
- scene.shapeMetrics={...(scene.shapeMetrics||{}),sequence:scene.shapeSequence||'smart',orderedShapes:scene.shapeGroups.length,drawnShapes:scene.shapeGroups.filter(group=>group.pathCount>0).length};
+ scene.elementDirection=direction;
+ scene.shapeMetrics={...(scene.shapeMetrics||{}),sequence:scene.shapeSequence||'smart',
+  direction,orderedElements:scene.shapeGroups.length,
+  elementsWithPaths:scene.shapeGroups.filter(group=>group.pathCount>0).length};
 }
-
 // Map each source pixel to a reveal time. Interior pixels follow their
 // nearest traced edge, so solid fills retain their original RGB values.
 const schedules=new WeakMap(),scheduleQueued=new WeakSet(),scheduleJobs=new Map();
