@@ -12,4 +12,5 @@ export { assignPathsToElements } from "./path-ownership.js";
 export { labelConnectedComponents, buildForegroundMask, groupComponents } from "./segmentation.js";
 export { routeElementStrokes, orderElements, finalizeElements } from "./route-planner.js";
 export { analyzeAndPlan } from "./pipeline.js";
+export { createRevealWorkerRequest, workerTransferables } from "./worker-contract.js";
 export type * from "./types.js";
