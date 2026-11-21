@@ -36,4 +36,16 @@ const close = engine.mergeComponents([
  {label:3,area:20,bounds:{x:60,y:0,width:10,height:10,cx:65,cy:5}}
 ],100,80);
 assert.equal(close.groups.length,2,'Nearby diacritics should merge with their glyph but distant shapes should remain separate');
+const enclosed = engine.mergeComponents([
+ {label:11,area:90,bounds:{x:10,y:10,width:60,height:50,cx:40,cy:35}},
+ {label:12,area:45,bounds:{x:27,y:22,width:13,height:15,cx:33.5,cy:29.5}},
+ {label:13,area:70,bounds:{x:73,y:16,width:18,height:28,cx:82,cy:30}}
+],120,80);
+assert.equal(enclosed.groups.length,2,
+ 'Interior icon strokes should belong to their enclosing cloud/badge while a neighbouring object stays separate');
+assert.ok(enclosed.groups.some(group=>group.componentLabels.includes(11)&&group.componentLabels.includes(12)),
+ 'The enclosing outline and its interior mark must form one drawable element');
+assert.ok(enclosed.groups.some(group=>group.componentLabels.length===1&&group.componentLabels[0]===13),
+ 'A neighbouring visual object must remain independently sequenced');
+
 console.log('RASM shape engine tests passed.');
