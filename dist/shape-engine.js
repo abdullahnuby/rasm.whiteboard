@@ -24,14 +24,14 @@
  }
  function lineBounds(line){return line.bounds||boundsOfPoints(line.points||[])}
  function componentBoundsClose(a,b,gx,gy,componentA,componentB){
-  const overlapX=Math.max(0,Math.min(a.x+a.width,b.x+b.width)-Math.max(a.x,b.x));
-  const overlapY=Math.max(0,Math.min(a.y+a.height,b.y+b.height)-Math.max(a.y,b.y));
-  const gapX=Math.max(0,Math.max(a.x,b.x)-Math.min(a.x+a.width,b.x+b.width));
-  const gapY=Math.max(0,Math.max(a.y,b.y)-Math.min(a.y+a.height,b.y+b.height));
-  const ratioX=overlapX/Math.max(1,Math.min(a.width,b.width));
-  const ratioY=overlapY/Math.max(1,Math.min(a.height,b.height));
   const small=componentA.area<=componentB.area?componentA:componentB;
   const large=small===componentA?componentB:componentA;
+  const A=componentA.bounds,B=componentB.bounds;
+  const gapX=Math.max(0,Math.max(A.x,B.x)-Math.min(A.x+A.width,B.x+B.width));
+  const gapY=Math.max(0,Math.max(A.y,B.y)-Math.min(A.y+A.height,B.y+B.height));
+
+  // Tiny disconnected marks (Arabic dots/diacritics) belong to a nearby,
+  // larger base only when size, horizontal alignment and gap all agree.
   const dot=small.area<=large.area*.22&&
    small.bounds.width<=Math.max(5,large.bounds.width*.72)&&
    small.bounds.height<=Math.max(5,large.bounds.height*.55);
@@ -39,9 +39,26 @@
   const closeVertically=gapY<=Math.max(6,large.bounds.height*.48);
   const closeHorizontally=gapX<=Math.max(4,large.bounds.width*.32);
   if(dot&&alignedX&&closeVertically&&closeHorizontally)return true;
-  // Equal-size neighbouring objects stay separate unless their raster masks
-  // almost touch and their projections strongly overlap.
-  return (gapX<=gx&&ratioY>=.38)||(gapY<=gy&&ratioX>=.38);
+
+  // An enclosing outline (speech bubble, cloud, badge, frame) owns its
+  // disconnected interior drawing parts. A neighbouring text/shape outside
+  // that outline must remain a separate drawable element.
+  const encloses=(outer,inner)=>{
+   const padX=Math.max(1,outer.width*.025),padY=Math.max(1,outer.height*.025);
+   return outer.width>=inner.width*1.35&&outer.height>=inner.height*1.35&&
+    inner.x>=outer.x+padX&&inner.y>=outer.y+padY&&
+    inner.x+inner.width<=outer.x+outer.width-padX&&
+    inner.y+inner.height<=outer.y+outer.height-padY;
+  };
+  if(encloses(A,B)||encloses(B,A))return true;
+
+  // Otherwise only merge components whose masks substantially overlap in
+  // both axes. Bounding-box proximity by itself is not object ownership.
+  const overlapX=Math.max(0,Math.min(A.x+A.width,B.x+B.width)-Math.max(A.x,B.x));
+  const overlapY=Math.max(0,Math.min(A.y+A.height,B.y+B.height)-Math.max(A.y,B.y));
+  const ratioX=overlapX/Math.max(1,Math.min(A.width,B.width));
+  const ratioY=overlapY/Math.max(1,Math.min(A.height,B.height));
+  return ratioX>=.82&&ratioY>=.82;
  }
  function connectedComponentsFallback(mask,width,height){
   const size=width*height,labels=new Int32Array(size),queue=new Int32Array(size),components=[];
