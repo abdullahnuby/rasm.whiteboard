@@ -26,6 +26,7 @@ assert.equal(new Set(Array.from(response.plan.order)).size, 16);
 for (let index = 0; index < 16; index++) assert.ok(response.plan.order.includes(index));
 const width = 40, height = 16, labels = new Uint16Array(width * height);
 for (let y = 3; y <= 9; y++) for (let x = 2; x <= 9; x++) labels[y * width + x] = 1;
+for (let offset = 1; offset <= 3; offset++) labels[(9 + offset) * width + (9 + offset)] = 1; // diagonal-only tail
 for (let y = 3; y <= 9; y++) for (let x = 24; x <= 32; x++) labels[y * width + x] = 2;
 const elementLines = [
   { start: 0, shapeId: 1, points: [[3, 6], [8, 6]] },
@@ -55,6 +56,8 @@ for (let p = 0; p < labels.length; p++) {
 assert.ok(Math.max(...firstPixels) < Math.min(...secondPixels),
   'The worker must finish revealing element 1 before beginning element 2');
 context.elementLines = elementLines;
+assert.ok(pixelTimes[12 * width + 12] < Math.max(...firstPixels),
+  'Diagonally connected pixels must reveal during their owning element, not as late leftovers');
 const physical = vm.runInContext('strokeTravelPlan(elementLines)', context);
 const firstSegment = physical.segments[0], secondSegment = physical.segments[1];
 assert.equal(Math.max(...firstPixels), Math.floor(255 * firstSegment.end / physical.end),
