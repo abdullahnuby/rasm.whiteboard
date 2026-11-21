@@ -4,6 +4,7 @@ import vm from 'node:vm';
 
 const source = await readFile('dist/engine.js', 'utf8');
 const context = vm.createContext({ Uint8Array, Uint8ClampedArray, Uint16Array, Uint32Array, Int16Array, Int32Array, Float32Array, Map, Math, Number, TypeError });
+vm.runInContext(await readFile('dist/shape-engine.js','utf8'), context);
 vm.runInContext(source, context);
 const engine = context.RasmImageEngine;
 assert.ok(engine, 'Image engine should be exported');
