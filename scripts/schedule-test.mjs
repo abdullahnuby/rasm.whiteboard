@@ -24,6 +24,21 @@ assert.equal(plan.ends[256], n, 'Every pixel needs a reveal time');
 let used = 0;
 for (let t = 0; t < 256; t++) if (plan.ends[t + 1] > plan.ends[t]) used++;
 assert.ok(used > 100, 'Reveal times should spread across the timeline');
+
+// Sparse and dense samples of the same physical route must share the same
+// physical-time mapping. The old point-index schedule advanced too quickly
+// through sparsely sampled sections and drifted away from the hand.
+const revealScene={
+ src:{width:128,height:32},
+ lines:[{start:0,points:[[10,16],[11,16],[90,16],[110,16]]}],
+ length:4
+};
+const revealPlan=vm.runInContext('buildColorSchedule(revealScene)',Object.assign(context,{revealScene}),{timeout:5000});
+const pixelTimes=new Uint16Array(128*32);
+for(let t=0;t<256;t++)for(let k=revealPlan.ends[t];k<revealPlan.ends[t+1];k++)pixelTimes[revealPlan.order[k]]=t;
+assert.equal(pixelTimes[16*128+11],2);
+assert.equal(pixelTimes[16*128+90],184);
+assert.equal(pixelTimes[16*128+110],230);
 // Without Worker support, preview must use the fast non-blocking linear fallback.
 const fallback = vm.runInContext('colorSchedule(scene)', context, { timeout: 5000 });
 assert.equal(fallback.linear, true);
