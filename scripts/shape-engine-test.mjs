@@ -25,7 +25,7 @@ assert.ok(assigned.length>=2&&assigned.length<paths.length,'Related strokes must
 assert.ok(result.centerGroups.every(group=>Array.isArray(group.lineIndices)));
 assert.ok(result.rasterLabels.some(label=>label>0),'Foreground component labels should be generated');
 const close = engine.mergeComponents([
- {label:1,area:20,bounds:{x:0,y:0,width:10,height:10,cx:5,cy:5}},
+ {label:1,area:100,bounds:{x:0,y:0,width:10,height:10,cx:5,cy:5}},
  {label:2,area:8,bounds:{x:3,y:-8,width:4,height:4,cx:5,cy:-6}},
  {label:3,area:20,bounds:{x:60,y:0,width:10,height:10,cx:65,cy:5}}
 ],100,80);
