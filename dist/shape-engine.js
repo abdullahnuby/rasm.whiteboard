@@ -23,13 +23,17 @@
   return Number.isFinite(minX)?{x:minX,y:minY,width:maxX-minX,height:maxY-minY,cx:(minX+maxX)/2,cy:(minY+maxY)/2}:{x:0,y:0,width:0,height:0,cx:0,cy:0};
  }
  function lineBounds(line){return line.bounds||boundsOfPoints(line.points||[])}
- function componentBoundsClose(a,b,gx,gy){
+ function componentBoundsClose(a,b,gx,gy,componentA,componentB){
   const overlapX=Math.max(0,Math.min(a.x+a.width,b.x+b.width)-Math.max(a.x,b.x));
   const overlapY=Math.max(0,Math.min(a.y+a.height,b.y+b.height)-Math.max(a.y,b.y));
   const gapX=Math.max(0,Math.max(a.x,b.x)-Math.min(a.x+a.width,b.x+b.width));
   const gapY=Math.max(0,Math.max(a.y,b.y)-Math.min(a.y+a.height,b.y+b.height));
   const ratioX=overlapX/Math.max(1,Math.min(a.width,b.width));
   const ratioY=overlapY/Math.max(1,Math.min(a.height,b.height));
+  const small=componentA.area<=componentB.area?componentA:componentB;
+  const large=small===componentA?componentB:componentA;
+  const diacritic=small.area<=large.area*.35&&small.bounds.height<=large.bounds.height*.55&&small.bounds.width<=large.bounds.width*.6;
+  if(diacritic&&gapY<=Math.max(6,large.bounds.height*.32)&&gapX<=Math.max(4,large.bounds.width*.38))return true;
   return (gapX<=gx&&ratioY>=.12)||(gapY<=gy&&ratioX>=.12)||(gapX<=gx*.55&&gapY<=gy*.55);
  }
  function connectedComponentsFallback(mask,width,height){
@@ -80,14 +84,14 @@
   if(!components.length)return {groups:[],labelToGroup:new Map()};
   const parent=components.map((_,i)=>i),find=x=>{while(parent[x]!==x){parent[x]=parent[parent[x]];x=parent[x]}return x};
   const join=(a,b)=>{a=find(a);b=find(b);if(a!==b)parent[b]=a};
-  const gx=clamp(Math.round(width*.016*scale),3,22),gy=clamp(Math.round(height*.014*scale),3,16);
+  const gx=clamp(Math.round(width*.022*scale),4,24),gy=clamp(Math.round(height*.014*scale),3,16);
   const sorted=components.map((component,index)=>({component,index})).sort((a,b)=>a.component.bounds.x-b.component.bounds.x);
   for(let i=0;i<sorted.length;i++){
    const a=sorted[i].component.bounds;
    for(let j=i+1;j<sorted.length;j++){
     const b=sorted[j].component.bounds;
     if(b.x>a.x+a.width+gx)break;
-    if(componentBoundsClose(a,b,gx,gy))join(sorted[i].index,sorted[j].index);
+    if(componentBoundsClose(a,b,gx,gy,sorted[i].component,sorted[j].component))join(sorted[i].index,sorted[j].index);
    }
   }
   const map=new Map();
