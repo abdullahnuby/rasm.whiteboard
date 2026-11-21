@@ -32,3 +32,22 @@ assert.ok(html.indexOf('engine.js') < html.indexOf('app.js'), 'engine.js must lo
 assert.ok(html.indexOf('reliability.js') < html.indexOf('timeline.js'), 'reliability.js must load before timeline.js');
 assert.ok(html.indexOf('timeline.js') < html.indexOf('export.js'), 'timeline.js must load before export.js');
 assert.ok(html.indexOf('export.js') < html.indexOf('app.js'), 'export.js must load before app.js');
+
+
+const motionSource=await readFile('dist/motion.js','utf8');
+const imageEngineSource=await readFile('dist/engine.js','utf8');
+const imageWorkerSource=await readFile('dist/engine-worker.js','utf8');
+assert.ok(motionSource.includes('async function applyZones(scene)'), 'Drawing plans must be requested asynchronously');
+assert.ok(!motionSource.includes('RasmWhiteboardCore.applyToLegacyScene(scene)'), 'The UI thread must not build drawing plans');
+assert.ok(!motionSource.includes('buildSynchronousSchedule'), 'Reveal worker failures must not fall back to blocking main-thread work');
+assert.ok(motionSource.includes('انتهت مهلة جدولة البكسلات'), 'Reveal timeout must be visible and actionable');
+assert.ok(imageEngineSource.includes('async function planAsync(scene)'), 'Image engine must expose Worker-backed planning');
+assert.ok(imageEngineSource.includes('timed out after'), 'Image worker requests must have a watchdog');
+assert.ok(imageWorkerSource.includes("action === 'plan'"), 'Image worker must accept off-thread plan requests');
+assert.ok(imageEngineSource.includes('cancelPending'), 'Image worker tasks must support explicit cancellation');
+assert.ok(appSource.includes('cancelPending?.'), 'Batch cancellation must stop the active image worker task');
+assert.ok(appSource.includes('items.length?[items[0]]:[]'), 'Initial prewarming must not schedule all imported scenes at once');
+assert.ok(appSource.includes('await applyZones(scene)'), 'Import must await Worker-based planning');
+assert.ok(appSource.includes('تفاصيل أول الأخطاء'), 'Import failures must display actionable causes');
+assert.ok(appSource.includes('توقفت المعاينة بسبب خطأ في محرك الرسم'), 'Playback render failures must be displayed instead of silently stopping');
+assert.ok(projectSource.includes('تعذّر قراءة النسخة:'), 'Project restore must display the underlying engine error');

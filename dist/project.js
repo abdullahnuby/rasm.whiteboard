@@ -120,7 +120,7 @@ el('backup').onclick=async()=>{
  if(recording||loading)return;
  projectDialog.close();busy(true);setOperationStatus('تجهيز نسخة المشروع',0,Math.max(1,scenes.length));
  try{await downloadProjectData(await snapshot(false),title)}
- catch{clearOperationStatus();el('msg').textContent='تعذّر تجهيز نسخة المشروع.'}
+ catch(error){clearOperationStatus();el('msg').textContent='تعذّر تجهيز نسخة المشروع: '+String(error?.message||error)}
  finally{busy(false)}
 };
 el('restore').onclick=()=>el('projectInput').click();
@@ -153,7 +153,7 @@ async function listRecovered(){
    open.onclick=async()=>{
     projectDialog.close();busy(true);
     try{await readProject(item.value);queueSave();projectDialog.close();el('msg').textContent='تم فتح النسخة المستردة.'}
-    catch{clearOperationStatus();el('msg').textContent='لم تنجح استعادة هذه النسخة. ما زالت محفوظة ويمكن تنزيلها.'}
+    catch(error){clearOperationStatus();el('msg').textContent='لم تنجح استعادة هذه النسخة: '+String(error?.message||error)+'. ما زالت محفوظة ويمكن تنزيلها.'}
     finally{busy(false)}
    };
    const download=document.createElement('button');download.textContent='تنزيل النسخة';
@@ -212,7 +212,7 @@ async function readProject(p){
    paper:/^#[a-f0-9]{6}$/i.test(row.paper)?row.paper:'#ffffff',
    transition:choose(row.transition,['cut','fade'],'cut')
   });
-  applyZones(s);restored.push(s);setOperationStatus('إعادة تحليل المشاهد · '+(sceneIndex+1)+' / '+p.scenes.length,sceneIndex+1,p.scenes.length);
+  await applyZones(s);restored.push(s);setOperationStatus('إعادة تحليل المشاهد · '+(sceneIndex+1)+' / '+p.scenes.length,sceneIndex+1,p.scenes.length);
  }
  let audio=null;
  if(p.audio){
@@ -248,7 +248,7 @@ el('projectInput').onchange=async e=>{
  if(file.size>300*1048576){el('msg').textContent='ملف المشروع أكبر من 300 ميجابايت.';e.target.value='';return}
  projectDialog.close();busy(true);
  try{await readProject(JSON.parse(await file.text()));queueSave();el('msg').textContent='تم فتح نسخة المشروع.'}
- catch{el('msg').textContent='تعذّر قراءة النسخة. المشروع الحالي ما زال مفتوح.'}
+ catch(error){el('msg').textContent='تعذّر قراءة النسخة: '+String(error?.message||error)+'. المشروع الحالي ما زال مفتوح.'}
  finally{busy(false);e.target.value=''}
 };
-(async()=>{busy(true);setTitle(title);try{const req=indexedDB.open('rasm-studio',1);req.onupgradeneeded=()=>req.result.createObjectStore('projects');db=await dbRequest(req);const last=await dbRequest(db.transaction('projects').objectStore('projects').get('current'));if(last){try{await readProject(last)}catch(error){clearOperationStatus();const keep='recovered-'+Date.now();await dbRequest(db.transaction('projects','readwrite').objectStore('projects').put(last,keep));el('saveState').textContent='تعذّر فتح المشروع المحفوظ. اتحفظت نسخة منه ('+keep+') ولن تُمسح.';return}}el('saveState').textContent=last?'تم استرجاع المشروع المحفوظ':'ابدأ باستيراد صورك · الحفظ تلقائي'}catch{db=null;el('saveState').textContent='تعذّر استرجاع الحفظ المحلي · الحفظ التلقائي متوقف حتى لا يُمسح شغلك. استخدم ملف المشروع'}finally{restoring=false;busy(false)}})();
+(async()=>{busy(true);setTitle(title);try{const req=indexedDB.open('rasm-studio',1);req.onupgradeneeded=()=>req.result.createObjectStore('projects');db=await dbRequest(req);const last=await dbRequest(db.transaction('projects').objectStore('projects').get('current'));if(last){try{await readProject(last)}catch(error){clearOperationStatus();const keep='recovered-'+Date.now();await dbRequest(db.transaction('projects','readwrite').objectStore('projects').put(last,keep));el('saveState').textContent='تعذّر فتح المشروع المحفوظ: '+String(error?.message||error)+'. اتحفظت نسخة منه ('+keep+') ولن تُمسح.';return}}el('saveState').textContent=last?'تم استرجاع المشروع المحفوظ':'ابدأ باستيراد صورك · الحفظ تلقائي'}catch{db=null;el('saveState').textContent='تعذّر استرجاع الحفظ المحلي · الحفظ التلقائي متوقف حتى لا يُمسح شغلك. استخدم ملف المشروع'}finally{restoring=false;busy(false)}})();

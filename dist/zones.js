@@ -16,5 +16,17 @@ zoneBoard.onpointermove=e=>{if(origin&&e.isPrimary)paintZones(rectangle(atPointe
 zoneBoard.onpointerup=e=>{if(!origin||!e.isPrimary)return;const r=rectangle(atPointer(e));if(r.w>.008&&r.h>.008)draft.push(r);origin=null;paintZones()};
 zoneBoard.onpointercancel=()=>{origin=null;paintZones()};
 el('zoneUndo').onclick=()=>{draft.pop();paintZones()};
-el('zoneSave').onclick=()=>{zoneScene.zones=draft.slice();applyZones(zoneScene);cache={};el('zoneDialog').close();pick(selected);queueSave()};
+el('zoneSave').onclick=async()=>{
+ if(!zoneScene)return;
+ const button=el('zoneSave');button.disabled=true;
+ el('msg').textContent='جارٍ إعادة تخطيط عناصر الرسم حسب المناطق…';
+ zoneScene.zones=draft.slice();
+ try{
+  await applyZones(zoneScene);
+  cache={};el('zoneDialog').close();pick(selected);queueSave();
+  el('msg').textContent='تم تطبيق ترتيب مناطق الرسم.';
+ }catch(error){
+  el('msg').textContent='تعذّر تطبيق ترتيب المناطق: '+String(error?.message||error);
+ }finally{button.disabled=false}
+};
 el('zoneClose').onclick=()=>el('zoneDialog').close();
