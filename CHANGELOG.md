@@ -1,3 +1,9 @@
+## 5.1.1 — Synchronize image reveal with the hand
+- Use one physical travel timeline for pen movement and pixel reveal, including the distance travelled between separate strokes.
+- Timestamp reveal seeds by cumulative path distance rather than point count, preventing image/hand drift on unevenly sampled paths.
+- Keep stroke-index coordinates only for drawing the active vector path; use normalized physical progress for the original-image reveal.
+- Add regression tests for uneven sampling and exact reveal timing along the same route.
+
 # 5.1.0
 - قائمة جانبية للموبايل مع إدارة المشروع والاستيراد والصوت والخصائص والتصدير.
 - استخدام لوحة خصائص واحدة عبر المقاسات، وإغلاق القائمة عند تغيير المقاس إلى الكمبيوتر.
