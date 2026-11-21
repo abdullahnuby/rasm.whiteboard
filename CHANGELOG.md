@@ -1,3 +1,12 @@
+# 5.2.1 — Element-based sequencing and directional drawing
+- Tighten OpenCV morphological closing to a 3×3 kernel and reduce proximity-based merges so neighbouring components remain separate elements.
+- Attach only small, aligned detached marks such as Arabic dots to a nearby larger component.
+- Keep every detected element's raster ownership ID aligned with the labels used by the reveal scheduler.
+- Remove global longest-stroke filtering; keep all available vector paths and sequence them inside their owning element.
+- Start the first path from the selected reading edge and route the remaining paths deterministically within each element.
+- Add per-scene RTL/LTR element ordering, persisted in .rasm projects.
+- Add tests for element isolation, stable ownership IDs, and directional element and stroke order.
+
 # 5.2.0 — Shape-aware writing engine
 - Add a locally bundled OpenCV.js 5.0.0 computer-vision runtime for morphological closing and connected-component segmentation.
 - Add Paper.js 0.17.0 vector geometry refinement for centerline and contour path simplification.
