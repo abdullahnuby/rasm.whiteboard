@@ -39,6 +39,26 @@ for(let t=0;t<256;t++)for(let k=revealPlan.ends[t];k<revealPlan.ends[t+1];k++)pi
 assert.equal(pixelTimes[16*128+11],2);
 assert.equal(pixelTimes[16*128+90],184);
 assert.equal(pixelTimes[16*128+110],230);
+
+// The same raster route is now segmented into two separate shapes. Pixels in
+// the second object must not be claimed by the first object's flood fill.
+const groupedScene={
+ src:{width:24,height:8},
+ lines:[
+  {start:0,shapeId:1,points:[[2,3],[3,3]]},
+  {start:2,shapeId:2,points:[[15,3],[16,3]]}
+ ],
+ length:4,rasterLabels:new Uint16Array(24*8)
+};
+for(let y=2;y<=4;y++)for(let x=1;x<=5;x++)groupedScene.rasterLabels[y*24+x]=1;
+for(let y=2;y<=4;y++)for(let x=13;x<=18;x++)groupedScene.rasterLabels[y*24+x]=2;
+const groupedPlan=vm.runInContext('buildColorSchedule(groupedScene)',Object.assign(context,{groupedScene}),{timeout:5000});
+const groupedTimes=new Uint16Array(24*8);
+for(let t=0;t<256;t++)for(let k=groupedPlan.ends[t];k<groupedPlan.ends[t+1];k++)groupedTimes[groupedPlan.order[k]]=t;
+const firstShapeTime=groupedTimes[3*24+4],secondShapeTime=groupedTimes[3*24+14];
+assert.ok(secondShapeTime>firstShapeTime,'The next object must reveal after the previous object');
+assert.ok(groupedTimes[3*24+13]>=secondShapeTime,'The first object must not reveal pixels inside the later object');
+
 // Without Worker support, preview must use the fast non-blocking linear fallback.
 const fallback = vm.runInContext('colorSchedule(scene)', context, { timeout: 5000 });
 assert.equal(fallback.linear, true);
