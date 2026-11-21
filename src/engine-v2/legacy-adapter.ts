@@ -12,11 +12,15 @@ export function buildLegacyRevealInput(scene: {
   totalDistance?: number;
 }): RevealSceneInput {
   const width = scene.src?.width ?? 0, height = scene.src?.height ?? 0;
-  if (!width || !height || !(scene.rasterLabels instanceof Uint32Array)) {
+  const labels = scene.rasterLabels;
+  const isUint32Labels = !!labels &&
+    ArrayBuffer.isView(labels) &&
+    Object.prototype.toString.call(labels) === "[object Uint32Array]";
+  if (!width || !height || !isUint32Labels) {
     throw new Error("Engine v2: no raster ownership map. Analyse the image before preview or export.");
   }
   return {
-    width, height, rasterLabels: scene.rasterLabels, lines: scene.lines ?? [],
+    width, height, rasterLabels: labels as Uint32Array, lines: scene.lines ?? [],
     totalDistance: scene.totalDistance ?? 0,
     shapeGroups: (scene.shapeGroups ?? []).map(group => ({
       id: group.id, rasterComponentLabels: group.rasterComponentLabels.slice()
