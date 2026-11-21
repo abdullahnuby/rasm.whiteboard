@@ -14,10 +14,17 @@ function setOperationStatus(label,done=0,total=1){
 function clearOperationStatus(){const panel=el('operationStatus');if(panel)panel.hidden=true}
 function prewarmColorSchedules(items){
  const queue=[...items];let index=0;
- const warmNext=()=>{
+ const warmNext=async()=>{
   if(index>=queue.length)return;
   const scene=queue[index++];
-  try{colorSchedule(scene)}catch(error){scene.engineScheduleError=String(error.message||error)}
+  try{await prepareColorSchedule(scene);scene.engineScheduleError=undefined}
+  catch(error){
+   scene.engineScheduleError=String(error?.message||error);
+   if(scenes.includes(scene)){
+    refreshEngineDiagnostics(scene);
+    el('msg').textContent='تعذّر تجهيز حركة بكسلات المشهد "'+scene.name+'": '+scene.engineScheduleError;
+   }
+  }
   setTimeout(warmNext,0);
  };
  setTimeout(warmNext,0);
@@ -238,22 +245,35 @@ el('duration').oninput=e=>{
 };
 el('duration').onchange=()=>{if(scenes[selected])pick(selected)};
 el('ratio').onchange=el('quality').onchange=size;const fields={sourceHand:'sourceHand',handSize:'handSize',weight:'weight',style:'mode',side:'side',paper:'paper',transition:'transition',sceneName:'name',hold:'hold'};
-for(const [id,key] of Object.entries(fields))el(id).onchange=()=>{if(!scenes[selected])return;scenes[selected][key]=['hold','weight','handSize'].includes(id)?Number(el(id).value):el(id).value;if(key==='mode'){applyZones(scenes[selected]);cache={}}refresh()};
-el('motionStyle').onchange=()=>{
+for(const [id,key] of Object.entries(fields))el(id).onchange=()=>{if(!scenes[selected])return;scenes[selected][key]=['hold','weight','handSize'].includes(id)?Number(el(id).value):el(id).value;if(key==='mode')cache={};refresh()};
+async function replanSelectedScene(label){
+ const scene=scenes[selected];if(!scene)return;
+ busy(true);setOperationStatus(label,0,1);
+ try{
+  await applyZones(scene);
+  cache={};refresh();queueSave();
+  el('msg').textContent='اكتمل تحديث خطة الرسم.';
+ }catch(error){
+  scene.engineScheduleError=String(error?.message||error);
+  refreshEngineDiagnostics(scene);
+  el('msg').textContent='تعذّر تحديث خطة الرسم: '+scene.engineScheduleError;
+ }finally{clearOperationStatus();busy(false)}
+}
+el('motionStyle').onchange=async()=>{
  if(!scenes[selected])return;
  scenes[selected].motionStyle=el('motionStyle').value;
- applyZones(scenes[selected]);cache={};refresh();queueSave();
+ await replanSelectedScene('إعادة بناء خطة مسارات الرسم…');
 };
-el('elementDirection').onchange=()=>{
+el('elementDirection').onchange=async()=>{
  if(!scenes[selected])return;
  scenes[selected].elementDirection=el('elementDirection').value;
- applyZones(scenes[selected]);cache={};refresh();queueSave();
+ await replanSelectedScene('إعادة ترتيب عناصر الرسم…');
 };
-el('downloadEngineDiagnostics').onclick=()=>{
+el('downloadEngineDiagnostics').onclick=async()=>{
  const scene=scenes[selected];if(!scene)return;
  try{
   let schedule;
-  if(scene.mode==='original')schedule=buildColorSchedule(scene);
+  if(scene.mode==='original'){await prepareColorSchedule(scene);schedule=buildColorSchedule(scene);}
   const report=RasmWhiteboardCore.createEngineReport(scene.engineAnalysisV2,scene.enginePlanV2,schedule);
   const blob=new Blob([JSON.stringify(report,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob),link=document.createElement('a');
@@ -294,7 +314,7 @@ async function importFiles(items){
  let bad=Math.max(0,imageItems.length-availableSlots)+unknown;
  const candidates=imageItems.slice(0,availableSlots);
  const controller={cancelled:false};activeImport=controller;
- const added=[];let done=0,projectPixels=currentProjectPixels();
+ const added=[],failures=[];let done=0,projectPixels=currentProjectPixels();
  stop();busy(true);el('batchCancel').disabled=false;
  updateBatchStatus('بدء تجهيز الصور…',0,candidates.length);
  try{
@@ -311,9 +331,14 @@ async function importFiles(items){
     }
     updateBatchStatus('تحليل '+file.name,done-1,candidates.length);
     const scene=await RasmImageEngine.analyzeAsync(img,file.name);
-    applyZones(scene);added.push(scene);projectPixels+=dimensions.pixels;
+    await applyZones(scene);added.push(scene);projectPixels+=dimensions.pixels;
     updateBatchStatus('تم تجهيز '+added.length+' صورة · '+file.name,done,candidates.length);
-   }catch{bad++;updateBatchStatus('تعذّر فتح '+file.name,done,candidates.length)}
+   }catch(error){
+    bad++;
+    const reason=String(error?.message||error||'unknown error');
+    failures.push(file.name+': '+reason);
+    updateBatchStatus('فشل تجهيز '+file.name+' · '+reason.slice(0,110),done-1,candidates.length);
+   }
    finally{URL.revokeObjectURL(url)}
   }
   if(added.length){
@@ -322,9 +347,10 @@ async function importFiles(items){
    const first=scenes.length;scenes.push(...added);prewarmColorSchedules(added);pick(first);queueSave();
   }
   const cancelled=controller.cancelled;
+  const detail=failures.length?'\nتفاصيل أول الأخطاء: '+failures.slice(0,3).join(' | ')+(failures.length>3?' | وأخطاء أخرى: '+(failures.length-3):''):'';
   el('msg').textContent=(added.length?'تم تجهيز '+added.length+' مشهد. ':'')+
    (bad?' تم تخطي '+bad+' ملف. ':'')+
-   (cancelled?'تم إلغاء الدفعة بعد اكتمال الصورة الحالية.':unknown?'تم تجاهل الملفات غير المدعومة.':'');
+   (cancelled?'تم إلغاء الدفعة بعد اكتمال الصورة الحالية.':unknown?'تم تجاهل الملفات غير المدعومة.':'')+detail;
  }finally{
   activeImport=null;el('batchStatus').hidden=true;el('batchCancel').disabled=false;busy(false);files.value='';
  }
@@ -388,7 +414,7 @@ el('export').onclick=async()=>{
 
 scenes=[];selected=0;time=0;size();refresh();
 
-el('allOriginal').onclick=()=>{if(!scenes.length)return;stop();for(const s of scenes){s.mode='original';applyZones(s)}cache={};pick(selected);queueSave();el('msg').textContent='تم تطبيق ألوان الصور الأصلية على كل المشاهد.'};
+el('allOriginal').onclick=()=>{if(!scenes.length)return;stop();for(const s of scenes)s.mode='original';cache={};pick(selected);queueSave();el('msg').textContent='تم تطبيق ألوان الصور الأصلية على كل المشاهد.'};
 
 function updateSpeed(all){
  if(!scenes.length)return;
