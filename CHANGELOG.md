@@ -3,6 +3,7 @@
 - Stop merging unrelated neighbouring objects merely because their bounding boxes have close horizontal or vertical projections.
 - Preserve nested illustration content (icons inside clouds, bubbles and badges) as one drawable element while leaving nearby outside text/objects independent.
 - Change raster reveal flood fill to 8-neighbour connectivity, matching OpenCV connected-component segmentation and preventing diagonal fragments from being deferred to the end of an element.
+- When a raster element has no centerline route, use its matching contour paths; when neither centerline nor contour paths exist, create a short fallback sweep inside its component bounds so no labelled visual element is left waiting until the end of the scene.
 - Add regression tests for an enclosing outline with interior marks next to an independent object, and for diagonal-only raster connectivity.
 
 # 5.2.2 — Exact hand-to-element reveal synchronization and slower default pace

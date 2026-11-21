@@ -8,6 +8,7 @@
 - Component groups now merge only when a small mark passes the diacritic attachment tests, a component is nested inside an enclosing outline, or masks overlap substantially in both axes.
 - Bounding-box proximity/projection overlap alone no longer merges neighbouring visual elements.
 - Raster reveal now uses 8-neighbour connectivity, matching the connected-component topology used by OpenCV.
+- For a component with no centerline route, the motion engine now uses contour paths from the same raster component. If no contour path exists either, it generates a short sweep within that component's own bounds. This prevents labelled image elements from having no hand movement and being revealed only at the scene end.
 - Nested content inside a cloud/speech bubble/badge is grouped with its enclosing outline; nearby external text and illustrations remain independent elements.
 
 ## Regression tests
