@@ -1,38 +1,48 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import vm from 'node:vm';
+import { analyzeRaster, buildDrawingPlan, buildRevealSchedule } from '../.build/index.js';
 
-const context = vm.createContext({ Uint8Array, Uint8ClampedArray, Uint16Array, Uint32Array, Int16Array, Int32Array, Float32Array, Map, WeakMap, Math, Number, TypeError, Array, Object });
-vm.runInContext(await readFile('dist/motion.js', 'utf8'), context);
-vm.runInContext(await readFile('dist/engine.js', 'utf8'), context);
-
-// Integration: real engine paths (fractional coordinates) must feed colorSchedule.
-const W = 240, H = 160, pixels = new Uint8ClampedArray(W * H * 4).fill(255);
-const dot = (x, y, c) => { const p = (y * W + x) * 4; pixels[p] = pixels[p + 1] = pixels[p + 2] = c; };
-for (let y = 30; y < 100; y++) for (let x = 40; x < 120; x++) dot(x, y, 40);
-for (let a = 0; a < 6.283; a += 0.002) dot(Math.round(180 + 35 * Math.cos(a)), Math.round(95 + 35 * Math.sin(a)), 0);
-const result = context.RasmImageEngine.extractPaths(pixels, W, H);
-assert.ok(result.lines.length > 0);
-assert.ok(result.lines.some(l => l.points.some(p => !Number.isInteger(p[0]) || !Number.isInteger(p[1]))), 'Test must exercise fractional points');
-
-context.scene = { src: { width: W, height: H }, lines: result.lines, length: result.length };
-// Exercise the full schedule algorithm directly; the UI now runs it in a Worker.
-const plan = vm.runInContext('buildColorSchedule(scene)', context, { timeout: 5000 });
-const n = W * H;
-assert.equal(plan.order.length, n);
-assert.equal(plan.ends[256], n, 'Every pixel needs a reveal time');
-let used = 0;
-for (let t = 0; t < 256; t++) if (plan.ends[t + 1] > plan.ends[t]) used++;
-assert.ok(used > 100, 'Reveal times should spread across the timeline');
-// Without Worker support, preview must use the fast non-blocking linear fallback.
-const fallback = vm.runInContext('colorSchedule(scene)', context, { timeout: 5000 });
-assert.equal(fallback.linear, true);
-assert.equal(fallback.order, null);
-assert.equal(vm.runInContext('colorSchedule(scene)', context), fallback, 'Fallback should be memoized per scene');
-// The first animation frame can be timestamped slightly before `start`, giving a negative fraction.
-for (const f of [-0.5, -1e-6, NaN, 0, 1, 2]) {
-  context.f = f;
-  const step = vm.runInContext('strokeProgress(scene, f)', context, { timeout: 5000 });
-  assert.ok(Number.isFinite(step.target) && step.target >= 0, 'strokeProgress must tolerate fraction ' + f);
+function raster(width, height) {
+  const pixels = new Uint8ClampedArray(width * height * 4);
+  for (let p = 0; p < width * height; p++) {
+    const q = p * 4;
+    pixels[q] = pixels[q + 1] = pixels[q + 2] = 255;
+    pixels[q + 3] = 255;
+  }
+  return pixels;
 }
-console.log('RASM schedule tests passed.');
+function rect(pixels, width, x0, y0, x1, y1, color) {
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const p = (y * width + x) * 4;
+    pixels[p] = color[0]; pixels[p + 1] = color[1]; pixels[p + 2] = color[2];
+  }
+}
+
+const width = 64, height = 24, pixels = raster(width, height);
+rect(pixels, width, 3, 6, 12, 18, [20, 70, 160]);
+rect(pixels, width, 46, 6, 57, 18, [190, 40, 20]);
+const analysis = analyzeRaster(pixels, width, height);
+const centerPaths = [
+  { id: 'left', points: [[4, 12], [7, 12], [11, 12]], source: 'centerline' },
+  { id: 'right', points: [[47, 12], [51, 12], [56, 12]], source: 'centerline' }
+];
+const plan = buildDrawingPlan(analysis, centerPaths, [], { direction: 'rtl' });
+const schedule = buildRevealSchedule({
+  width, height, rasterLabels: plan.rasterLabels, lines: plan.lines,
+  totalDistance: plan.totalDistance,
+  shapeGroups: plan.elements.map(element => ({ id: element.id, rasterComponentLabels: element.componentIds }))
+});
+assert.equal(schedule.order.length, width * height);
+assert.equal(schedule.ends[256], width * height);
+assert.equal(schedule.diagnostics.unscheduledPixels, 0);
+const times = schedule.timings;
+const firstLabel = plan.elements[0].componentIds[0], secondLabel = plan.elements[1].componentIds[0];
+const first = [], second = [];
+for (let pixel = 0; pixel < plan.rasterLabels.length; pixel++) {
+  if (plan.rasterLabels[pixel] === firstLabel) first.push(times[pixel]);
+  if (plan.rasterLabels[pixel] === secondLabel) second.push(times[pixel]);
+}
+assert.ok(first.length && second.length);
+assert.ok(Math.max(...first) <= Math.min(...second),
+  'The first element must finish before the second element starts');
+assert.equal(schedule.diagnostics.unseededComponents.length, 0);
+console.log('RASM element-aware raster schedule tests passed.');

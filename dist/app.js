@@ -14,7 +14,12 @@ function setOperationStatus(label,done=0,total=1){
 function clearOperationStatus(){const panel=el('operationStatus');if(panel)panel.hidden=true}
 function prewarmColorSchedules(items){
  const queue=[...items];let index=0;
- const warmNext=()=>{if(index>=queue.length)return;colorSchedule(queue[index++]);setTimeout(warmNext,0)};
+ const warmNext=()=>{
+  if(index>=queue.length)return;
+  const scene=queue[index++];
+  try{colorSchedule(scene)}catch(error){scene.engineScheduleError=String(error.message||error)}
+  setTimeout(warmNext,0);
+ };
  setTimeout(warmNext,0);
 }
 function path(c,points,ink,width=1.4){c.beginPath();c.moveTo(...points[0]);for(let i=1;i<points.length;i++)c.lineTo(...points[i]);c.strokeStyle=ink;c.lineWidth=width;c.lineJoin=c.lineCap='round';c.stroke()}
@@ -57,7 +62,7 @@ let cache={};
 function render(t){
  const W=board.width,H=board.height;ctx.fillStyle='white';ctx.fillRect(0,0,W,H);
  if(!scenes.length)return;let i=0,local=t;while(i<scenes.length-1 && local>=sceneSeconds(scenes[i]))local-=sceneSeconds(scenes[i++]);
- const s=scenes[i],mode=s.mode,duration=sceneSeconds(s),drawTime=duration*(1-s.hold/100),frac=Math.min(1,local/drawTime),motion=strokeProgress(s,mode==='original'?Math.min(1,frac/.86):frac),target=motion.target;
+ const s=scenes[i],mode=s.mode,duration=sceneSeconds(s),drawTime=duration*(1-s.hold/100),frac=Math.min(1,local/drawTime),motion=strokeProgress(s,frac),target=motion.target;
  ctx.fillStyle=s.paper;ctx.fillRect(0,0,W,H);
  if(cache.s!==s || cache.mode!==mode || cache.weight!==s.weight || target<cache.t){let lay=surface(s.src.width,s.src.height);cache={s,mode,weight:s.weight,lay,c:lay.getContext('2d'),idx:0,t:0}}
  let tip;
@@ -74,28 +79,30 @@ function render(t){
    else break;
   }
  }
- if(original&&!cache.pixels){
-  const plan=colorSchedule(s);
-  if(plan){
-   const data=s.src.getContext('2d').getImageData(0,0,s.src.width,s.src.height);
-   const image=cache.c.createImageData(s.src.width,s.src.height);
-   cache.pixels={...plan,source:new Uint32Array(data.data.buffer),output:new Uint32Array(image.data.buffer),image,count:0};
+ if(original&&!cache.pixels&&!s.engineScheduleError){
+  try{
+   const plan=colorSchedule(s);
+   if(plan){
+    const data=s.src.getContext('2d').getImageData(0,0,s.src.width,s.src.height);
+    const image=cache.c.createImageData(s.src.width,s.src.height);
+    cache.pixels={...plan,source:new Uint32Array(data.data.buffer),output:new Uint32Array(image.data.buffer),image,count:0};
+   }
+  }catch(error){
+   s.engineScheduleError=String(error.message||error);
+   refreshEngineDiagnostics(s);
+   el('msg').textContent='خطأ في خطة رسم المشهد: '+s.engineScheduleError;
   }
  }
  if(original&&cache.pixels){
-  let reveal=frac/.96;
-  if(s.length)reveal=frac<.86?target/s.length*230/256:(230+(frac-.86)/.10*26)/256;
-  if(revealPixels(cache.pixels,Math.min(1,reveal)))cache.c.putImageData(cache.pixels.image,0,0)
+  // Both the marker and every owned raster pixel share the same physical scene clock.
+  if(revealPixels(cache.pixels,frac))cache.c.putImageData(cache.pixels.image,0,0)
  }
  cache.t=target;const sc=Math.min(W/s.src.width,H/s.src.height)*.96,ox=(W-sc*s.src.width)/2,oy=(H-sc*s.src.height)/2;
  ctx.save();ctx.translate(ox,oy);ctx.scale(sc,sc);ctx.drawImage(cache.lay,0,0);
- if(original&&!cache.pixels){const reveal=Math.min(1,frac/.96);ctx.save();ctx.beginPath();ctx.rect(0,0,s.src.width,s.src.height*reveal);ctx.clip();ctx.drawImage(s.src,0,0);ctx.restore()}
- tip=frac<.86||mode!=='original'?motion.tip||null:null;
- if(!tip && original && !s.length && frac<.96 && cache.pixels){
-  const pixels=cache.pixels;
-  const pixel=pixels.linear?Math.max(0,pixels.count-1):pixels.order[Math.max(0,pixels.count-1)];
-  tip=[pixel%s.src.width,Math.floor(pixel/s.src.width)]
- }
+ // No top-down or row-major fallback: the element-owned schedule is mandatory.
+ tip=frac<1||mode!=='original'?motion.tip||null:null;
+ if(original&&!cache.pixels)tip=null;
+
  if(mode==='fill' && frac===1){ctx.globalAlpha=Math.min(1,s.hold===0?1:(local-drawTime)/Math.min(.6,duration*s.hold/100));ctx.drawImage(s.src,0,0);ctx.globalAlpha=1}
  ctx.restore();if(tip&&overlayEnabled(s))drawHand(ctx,ox+tip[0]*sc,oy+tip[1]*sc,Math.min(W,H)/425*s.handSize/100,s.tone,s.side);
  if(s.transition==='fade'){ctx.globalAlpha=Math.max(0,1-(duration-local)/Math.min(.45,duration*.22));ctx.fillStyle=s.paper;ctx.fillRect(0,0,W,H);ctx.globalAlpha=1}
@@ -192,9 +199,31 @@ el('zoomOut').onclick=()=>{timelineScale=Math.max(.5,timelineScale-6);renderTime
 el('zoomFit').onclick=()=>{const seconds=Math.max(total(),audioTimeline?.duration||0);timelineScale=Math.max(.5,Math.min(80,(el('timelineScroll').clientWidth-50)/Math.max(1,seconds)));renderTimeline()};
 
 function pick(i){stop();selected=i;time=offset(i)+sceneSeconds(scenes[i])*.75;refresh();const clip=el('timelineVideoTrack').querySelector('[data-index="'+i+'"]');clip?.scrollIntoView({block:'nearest',inline:'nearest'})}
-function refresh(){if(typeof refreshGuide==='function')refreshGuide();const current=scenes[selected]||defaults;el('speed').value=current.speed||1;el('motionStyle').value=current.motionStyle||'smart';el('sceneTime').textContent=scenes.length?'مدة المشهد بعد ضبط السرعة: '+sceneSeconds(current).toFixed(1)+' ث':'';el('sourceHand').value=current.sourceHand;el('handSize').value=current.handSize;el('sizeValue').value=current.handSize+'%';el('weight').value=current.weight;el('zoneEdit').disabled=!scenes.length;el('handState').textContent=current.sourceHand==='present'?'تُستخدم اليد الظاهرة في الصورة.':current.handHint&&current.sourceHand==='auto'?'إذا ظهرت يد في الصورة، اختر «الصورة تتضمّن يدًا».':current.handHint&&current.sourceHand==='detect'?'أُخفيت اليد بناءً على الفحص.':'';el('style').value=current.mode;el('side').value=current.side;el('paper').value=current.paper;el('hold').value=current.hold;el('holdValue').value=current.hold+'%';el('transition').value=current.transition;el('sceneName').value=current.name||'';document.querySelectorAll('#hands button').forEach((b,i)=>b.classList.toggle('active',Number(b.dataset.tone)===current.tone));range.max=total();el('duration').value=scenes.length?sceneSeconds(scenes[selected]).toFixed(1):'6';el('count').textContent=scenes.length+' مشاهد';el('cards').replaceChildren();scenes.forEach((s,i)=>{const b=document.createElement('button');b.className='card'+(i===selected?' active':'');const img=new Image();img.src=s.thumb;const caption=document.createElement('span');caption.textContent=(i+1)+' · '+s.name;b.append(img,caption);b.onclick=()=>pick(i);el('cards').append(b)});
+function refreshEngineDiagnostics(scene){
+ const panel=el('engineDiagnosticsPanel');
+ if(!panel)return;
+ panel.hidden=!scene;
+ if(!scene){el('engineDiagnosticsText').textContent='لا يوجد مشهد محدد.';return}
+ const analysis=scene.engineAnalysisV2?.diagnostics||{};
+ const plan=scene.enginePlanV2?.diagnostics||scene.engineDiagnostics||{};
+ const warnings=[...(analysis.warnings||[]),...(plan.warnings||[])];
+ const rows=[
+  'إصدار المحرك: '+(analysis.engineVersion||'—'),
+  'مكونات الصورة: '+(analysis.componentCount??'—'),
+  'عناصر الرسم: '+(plan.elementCount??analysis.elementCount??'—'),
+  'المسارات المُسنَدة: '+(plan.assignedPaths??'—'),
+  'المسارات المقسمة حسب الملكية: '+(plan.splitPaths??'—'),
+  'حدود مستعادة من البكسلات: '+(plan.tracedComponents??'—'),
+  'مكونات بلا مسار قلم: '+(plan.componentsWithoutStrokes??'—'),
+  'بكسلات بلا توقيت: '+(plan.rasterPixelsWithoutSeed??'—')
+ ];
+ if(scene.engineScheduleError)rows.push('خطأ الجدولة: '+scene.engineScheduleError);
+ if(warnings.length)rows.push('تحذيرات:\n'+warnings.join('\n'));
+ el('engineDiagnosticsText').textContent=rows.join('\n');
+}
+function refresh(){if(typeof refreshGuide==='function')refreshGuide();const current=scenes[selected]||defaults;el('speed').value=current.speed||1;el('motionStyle').value=current.motionStyle||'smart';el('elementDirection').value=current.elementDirection||'rtl';el('sceneTime').textContent=scenes.length?'مدة المشهد بعد ضبط السرعة: '+sceneSeconds(current).toFixed(1)+' ث':'';el('sourceHand').value=current.sourceHand;el('handSize').value=current.handSize;el('sizeValue').value=current.handSize+'%';el('weight').value=current.weight;el('zoneEdit').disabled=!scenes.length;el('handState').textContent=current.sourceHand==='present'?'تُستخدم اليد الظاهرة في الصورة.':current.handHint&&current.sourceHand==='auto'?'إذا ظهرت يد في الصورة، اختر «الصورة تتضمّن يدًا».':current.handHint&&current.sourceHand==='detect'?'أُخفيت اليد بناءً على الفحص.':'';el('style').value=current.mode;el('side').value=current.side;el('paper').value=current.paper;el('hold').value=current.hold;el('holdValue').value=current.hold+'%';el('transition').value=current.transition;el('sceneName').value=current.name||'';document.querySelectorAll('#hands button').forEach((b,i)=>b.classList.toggle('active',Number(b.dataset.tone)===current.tone));range.max=total();el('duration').value=scenes.length?sceneSeconds(scenes[selected]).toFixed(1):'6';el('count').textContent=scenes.length+' مشاهد';el('cards').replaceChildren();scenes.forEach((s,i)=>{const b=document.createElement('button');b.className='card'+(i===selected?' active':'');const img=new Image();img.src=s.thumb;const caption=document.createElement('span');caption.textContent=(i+1)+' · '+s.name;b.append(img,caption);b.onclick=()=>pick(i);el('cards').append(b)});
  el('earlier').disabled=selected<=0;el('later').disabled=selected>=scenes.length-1;for(const id of ['export','play','remove','duration','seek'])el(id).disabled=!scenes.length;
- if(!scenes.length){el('clock').textContent='0:00 / 0:00';el('meta').textContent='';range.value=0}renderTimeline();render(time);if(typeof refreshGuide==='function')refreshGuide()}
+ if(!scenes.length){el('clock').textContent='0:00 / 0:00';el('meta').textContent='';range.value=0}renderTimeline();render(time);refreshEngineDiagnostics(scenes[selected]||null);if(typeof refreshGuide==='function')refreshGuide()}
 function setBoardResolution(longEdge){const r=+el('ratio').value;const width=r>=1?longEdge:Math.round(longEdge*r/2)*2;const height=r>=1?Math.round(longEdge/r/2)*2:longEdge;if(board.width!==width||board.height!==height){board.width=width;board.height=height}render(time)}
 function size(){setBoardResolution(Math.min(960,+el('quality').value))}
 function exportSize(){setBoardResolution(+el('quality').value)}
@@ -214,6 +243,25 @@ el('motionStyle').onchange=()=>{
  if(!scenes[selected])return;
  scenes[selected].motionStyle=el('motionStyle').value;
  applyZones(scenes[selected]);cache={};refresh();queueSave();
+};
+el('elementDirection').onchange=()=>{
+ if(!scenes[selected])return;
+ scenes[selected].elementDirection=el('elementDirection').value;
+ applyZones(scenes[selected]);cache={};refresh();queueSave();
+};
+el('downloadEngineDiagnostics').onclick=()=>{
+ const scene=scenes[selected];if(!scene)return;
+ try{
+  let schedule;
+  if(scene.mode==='original')schedule=buildColorSchedule(scene);
+  const report=RasmWhiteboardCore.createEngineReport(scene.engineAnalysisV2,scene.enginePlanV2,schedule);
+  const blob=new Blob([JSON.stringify(report,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob),link=document.createElement('a');
+  link.href=url;link.download='rasm-engine-scene-'+(selected+1)+'-diagnostics.json';
+  link.click();setTimeout(()=>URL.revokeObjectURL(url),5000);
+ }catch(error){
+  el('engineDiagnosticsText').textContent+='\n\nتعذّر بناء تقرير الجدولة: '+String(error.message||error);
+ }
 };
 el('addFiles').onclick=()=>files.click();range.oninput=()=>{stop();time=+range.value;render(time)};
 for(const [id,label,icon] of [[4,'فوتوغرافية',''],[0,'مرسومة','✍🏻'],[1,'داكنة','✍🏾'],[2,'بدون يد','∅']]){

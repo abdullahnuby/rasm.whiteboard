@@ -1,3 +1,15 @@
+# 6.0.0 — RASM Engine v2
+- Introduce a modular TypeScript engine with strict contracts for raster analysis, connected components, drawable elements, vector-path ownership, route planning, pixel reveal scheduling and diagnostics.
+- Replace global longest-stroke selection and bounding-box proximity routing with per-component path ownership; vector paths are split when they cross component ownership.
+- Trace an actual raster component outline when it has no centerline or contour route; missing seeds and unscheduled pixels are reported as hard errors.
+- Share one element plan and reveal scheduler between the browser and motion Worker. Worker failure uses the same scheduler synchronously; no row-major or top-to-bottom reveal fallback remains.
+- Drive the drawing hand and image reveal with the same physical progress clock, including pen-up travel.
+- Add RTL/LTR element ordering persisted in .rasm projects.
+- Add an in-app scene diagnostics report with downloadable JSON, path ownership, route recovery, unscheduled components and warnings.
+- Keep a legacy adapter for .rasm project versions 2 and 3 and the existing editor/audio/timeline/export shell.
+- Add TypeScript type checks and dedicated segmentation, ownership, planner, outline trace, scheduler, worker-contract and integration tests.
+- Pin OpenCV.js and Paper.js locally with dependency manifests and third-party license notices.
+
 # 5.1.0
 - قائمة جانبية للموبايل مع إدارة المشروع والاستيراد والصوت والخصائص والتصدير.
 - استخدام لوحة خصائص واحدة عبر المقاسات، وإغلاق القائمة عند تغيير المقاس إلى الكمبيوتر.

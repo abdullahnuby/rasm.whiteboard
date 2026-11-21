@@ -1,6 +1,5 @@
 'use strict';
-// Detect a large, warm-coloured region connected to a frame edge. This is a
-// conservative hint for photographed hands, not an object recognition model.
+
 function edgeSkinRegion(data,w,h){
  const step=Math.max(1,Math.round(Math.max(w,h)/96)),cols=Math.ceil(w/step),rows=Math.ceil(h/step);
  const mask=new Uint8Array(cols*rows),queue=new Int32Array(mask.length);
@@ -14,158 +13,115 @@ function edgeSkinRegion(data,w,h){
    for(const j of [x?p-1:-1,x<cols-1?p+1:-1,y?p-cols:-1,y<rows-1?p+cols:-1])if(j>=0&&mask[j]){mask[j]=0;queue[tail++]=j}
   }
   if(tail/mask.length>=.065&&edge>=Math.max(2,Math.min(cols,rows)*.06))return true;
- }return false
-}
-function overlayEnabled(s){return s.tone!==2&&s.sourceHand!=='present'&&(s.sourceHand!=='detect'||!s.handHint)}
-// Original-colour scenes can reveal fine detail without sending the marker
-// through every texture fragment. Line-only modes retain their full paths.
-function principalStrokes(lines,width,height){
- if(lines.length<36)return lines;
- const ranked=lines.map((line,index)=>{
-  let distance=0;
-  for(let i=1;i<line.points.length;i++)distance+=Math.hypot(line.points[i][0]-line.points[i-1][0],line.points[i][1]-line.points[i-1][1]);
-  return {line,index,distance}
- }).sort((a,b)=>b.distance-a.distance);
- const budget=Math.hypot(width,height)*3,chosen=new Set();
- let distance=0;
- for(const item of ranked){
-  if(chosen.size>=120||(chosen.size>=12&&distance>=budget))break;
-  chosen.add(item.index);distance+=item.distance
  }
- return lines.filter((_,index)=>chosen.has(index))
+ return false;
 }
-function routeStrokes(lines){
- if(lines.length<2)return lines;
- const size=48,buckets=new Map(),remaining=new Set(lines.map((_,i)=>i));
- const key=p=>Math.floor(p[0]/size)+','+Math.floor(p[1]/size);
- lines.forEach((line,index)=>{for(const p of [line.points[0],line.points.at(-1)]){
-  const k=key(p);if(!buckets.has(k))buckets.set(k,[]);buckets.get(k).push(index)
- }});
- const ordered=[];let point=lines[0].points[0];
- while(remaining.size){
-  const bx=Math.floor(point[0]/size),by=Math.floor(point[1]/size);
-  let candidate=-1,distance=Infinity,reverse=false;
-  for(let ring=0;ring<4&&candidate<0;ring++){
-   for(let x=-ring;x<=ring;x++)for(let y=-ring;y<=ring;y++){
-    if(Math.max(Math.abs(x),Math.abs(y))!==ring)continue;
-    for(const index of buckets.get((bx+x)+','+(by+y))||[]){
-     if(!remaining.has(index))continue;
-     const line=lines[index];
-     for(const flip of [false,true]){
-      const p=flip?line.points.at(-1):line.points[0],d=Math.hypot(p[0]-point[0],p[1]-point[1]);
-      if(d<distance){candidate=index;distance=d;reverse=flip}
-     }
-    }
-   }
-  }
-  if(candidate<0)candidate=remaining.values().next().value;
-  remaining.delete(candidate);const line=lines[candidate];
-  const next=reverse?{...line,points:line.points.slice().reverse()}:line;
-  ordered.push(next);point=next.points.at(-1)
- }
- return ordered
-}
-function applyZones(scene){
- const center=scene.motionStyle!=='contour'&&Array.isArray(scene.centerBaseLines)&&scene.centerBaseLines.length>0;
- let source=center?scene.centerBaseLines:scene.baseLines;
- if(scene.motionStyle!=='contour'&&scene.mode==='original')source=principalStrokes(source,scene.src.width,scene.src.height);
- const zones=scene.zones,groups=Array.from({length:zones.length+1},()=>[]);
- for(const line of source){const point=line.points[Math.floor(line.points.length/2)],x=point[0]/scene.src.width,y=point[1]/scene.src.height;
- const idx=zones.findIndex(z=>x>=z.x&&y>=z.y&&x<=z.x+z.w&&y<=z.y+z.h);groups[idx<0?zones.length:idx].push(line)}
- let start=0;scene.lines=groups.flatMap(group=>routeStrokes(group)).map(line=>{
-  const result={...line,start};start+=line.points.length;return result
- });
- scene.length=start;scene.usingCenterline=center
+function overlayEnabled(scene){
+ return scene.tone!==2&&scene.sourceHand!=='present'&&(scene.sourceHand!=='detect'||!scene.handHint);
 }
 
-// Map each source pixel to a reveal time. Interior pixels follow their
-// nearest traced edge, so solid fills retain their original RGB values.
-const schedules=new WeakMap(),scheduleQueued=new WeakSet(),scheduleJobs=new Map();
-let scheduleWorker=null,scheduleJobId=0;
-function linearColorSchedule(scene){
- const count=scene.src.width*scene.src.height,ends=new Uint32Array(257);
- for(let t=0;t<=256;t++)ends[t]=Math.floor(count*t/256);
- return {order:null,ends,linear:true}
+// The UI shell is only an adapter. Engine v2 owns all image and path analysis.
+function applyZones(scene){
+ if(!globalThis.RasmWhiteboardCore)throw new Error('RASM Engine v2 is not loaded.');
+ return globalThis.RasmWhiteboardCore.applyToLegacyScene(scene).plan;
 }
-function failScheduleWorker(){
- for(const [id,job] of scheduleJobs){
-  scheduleJobs.delete(id);scheduleQueued.delete(job.lines);
-  schedules.set(job.lines,{w:job.width,h:job.height,plan:linearColorSchedule(job.scene)});
+
+const revealSchedules=new WeakMap(),revealQueued=new WeakSet(),revealErrors=new WeakMap(),revealJobs=new Map();
+let revealWorker=null,revealRequestId=0;
+
+function buildColorSchedule(scene){
+ if(!globalThis.RasmWhiteboardCore)throw new Error('RASM Engine v2 is not loaded.');
+ return globalThis.RasmWhiteboardCore.buildLegacyRevealSchedule(scene);
+}
+function rememberSchedule(scene,plan){
+ revealSchedules.set(scene.lines,{width:scene.src.width,height:scene.src.height,plan});
+ revealErrors.delete(scene.lines);revealQueued.delete(scene.lines);
+}
+function buildSynchronousSchedule(scene){
+ try{const plan=buildColorSchedule(scene);rememberSchedule(scene,plan);return plan}
+ catch(error){revealErrors.set(scene.lines,error);revealQueued.delete(scene.lines);throw error}
+}
+function failRevealWorker(){
+ revealWorker?.terminate();revealWorker=null;
+ for(const [id,job] of revealJobs){
+  revealJobs.delete(id);
+  try{buildSynchronousSchedule(job.scene)}catch(error){revealErrors.set(job.lines,error)}
  }
- scheduleWorker?.terminate();scheduleWorker=null;
 }
-function getScheduleWorker(){
+function getRevealWorker(){
  if(typeof Worker!=='function')return null;
- if(scheduleWorker)return scheduleWorker;
+ if(revealWorker)return revealWorker;
  try{
-  scheduleWorker=new Worker('motion-worker.js');
-  scheduleWorker.onmessage=event=>{
-   const job=scheduleJobs.get(event.data.id);if(!job)return;
-   scheduleJobs.delete(event.data.id);scheduleQueued.delete(job.lines);
-   const plan=event.data.error?linearColorSchedule(job.scene):event.data.plan;
-   schedules.set(job.lines,{w:job.width,h:job.height,plan});
+  revealWorker=new Worker('motion-worker.js');
+  revealWorker.onmessage=event=>{
+   const job=revealJobs.get(event.data.id);if(!job)return;
+   revealJobs.delete(event.data.id);revealQueued.delete(job.lines);
+   if(event.data.error){try{buildSynchronousSchedule(job.scene)}catch(error){revealErrors.set(job.lines,error)};return}
+   revealSchedules.set(job.lines,{width:job.width,height:job.height,plan:event.data.plan});
   };
-  scheduleWorker.onerror=failScheduleWorker;
-  return scheduleWorker;
+  revealWorker.onerror=failRevealWorker;
+  return revealWorker;
  }catch{return null}
 }
 function requestColorSchedule(scene){
  const lines=scene.lines,width=scene.src.width,height=scene.src.height;
- if(scheduleQueued.has(lines))return;
- const worker=getScheduleWorker();
- if(!worker){schedules.set(lines,{w:width,h:height,plan:linearColorSchedule(scene)});return}
- const id=++scheduleJobId;scheduleQueued.add(lines);scheduleJobs.set(id,{scene,lines,width,height});
+ if(revealSchedules.has(lines)||revealQueued.has(lines))return;
+ const worker=getRevealWorker();
+ if(!worker){buildSynchronousSchedule(scene);return}
+ const labels=scene.rasterLabels;
+ if(!(labels instanceof Uint32Array)||labels.length!==width*height)throw new Error('RASM Engine v2: raster ownership labels are missing or invalid.');
+ const id=++revealRequestId;revealQueued.add(lines);revealJobs.set(id,{scene,lines,width,height});
  try{
-  worker.postMessage({id,width,height,length:scene.length,lines:lines.map(line=>({start:line.start,points:line.points}))});
+  const rasterLabels=labels.slice();
+  worker.postMessage({
+   id,width,height,totalDistance:scene.totalDistance,
+   lines:lines.map(line=>({
+    id:line.id,start:line.start,elementId:line.elementId,shapeId:line.shapeId,
+    componentId:line.componentId,source:line.source,points:line.points
+   })),
+   rasterLabels,
+   shapeGroups:(scene.shapeGroups||[]).map(group=>({id:group.id,rasterComponentLabels:group.rasterComponentLabels||[]}))
+  },[rasterLabels.buffer]);
  }catch{
-  scheduleJobs.delete(id);scheduleQueued.delete(lines);
-  schedules.set(lines,{w:width,h:height,plan:linearColorSchedule(scene)});
+  revealJobs.delete(id);revealQueued.delete(lines);buildSynchronousSchedule(scene);
  }
 }
 function colorSchedule(scene){
- const cached=schedules.get(scene.lines);
- if(cached&&cached.w===scene.src.width&&cached.h===scene.src.height)return cached.plan;
- requestColorSchedule(scene);return schedules.get(scene.lines)?.plan||null;
+ const cached=revealSchedules.get(scene.lines);
+ if(cached&&cached.width===scene.src.width&&cached.height===scene.src.height)return cached.plan;
+ const error=revealErrors.get(scene.lines);if(error)throw error;
+ requestColorSchedule(scene);
+ return revealSchedules.get(scene.lines)?.plan||null;
 }
-function buildColorSchedule(scene){
- const w=scene.src.width,h=scene.src.height,n=w*h;
- const times=new Uint8Array(n),seen=new Uint8Array(n),queue=new Uint32Array(n);
- let head=0,tail=0;
- for(const line of scene.lines)for(let j=0;j<line.points.length;j++){
-  const x=Math.min(w-1,Math.max(0,Math.round(line.points[j][0]))),y=Math.min(h-1,Math.max(0,Math.round(line.points[j][1]))),p=y*w+x;
-  if(!seen[p]){seen[p]=1;times[p]=Math.floor(230*(line.start+j)/scene.length);queue[tail++]=p}
- }
- if(!tail){for(let p=0;p<n;p++)times[p]=Math.floor(255*p/n)}
- while(head<tail){
-  const p=queue[head++],x=p%w;
-  for(const k of [x>0?p-1:-1,x+1<w?p+1:-1,p-w,p+w]){
-   if(k<0||k>=n||seen[k])continue;
-   seen[k]=1;times[k]=Math.min(255,times[p]+1);queue[tail++]=k;
+async function prepareColorSchedule(scene){
+ if(scene.mode!=='original')return null;
+ const deadline=Date.now()+30000;
+ while(!colorSchedule(scene)){
+  const error=revealErrors.get(scene.lines);if(error)throw error;
+  if(Date.now()>deadline){
+   failRevealWorker();
+   if(!revealSchedules.has(scene.lines))buildSynchronousSchedule(scene);
+   break;
   }
+  await new Promise(resolve=>setTimeout(resolve,12));
  }
- const ends=new Uint32Array(257);
- for(const t of times)ends[t+1]++;
- for(let i=1;i<ends.length;i++)ends[i]+=ends[i-1];
- const cursor=ends.slice(),order=new Uint32Array(n);
- for(let p=0;p<n;p++)order[cursor[times[p]]++]=p;
- return {order,ends}
+ const plan=revealSchedules.get(scene.lines)?.plan;
+ if(!plan)throw new Error('RASM Engine v2 could not prepare a complete reveal schedule.');
+ return plan;
 }
-function revealPixels(layer,frac){
- const count=layer.ends[Math.min(256,Math.floor(256*frac))];
+function revealPixels(layer,fraction){
+ const count=layer.ends[Math.min(256,Math.max(0,Math.floor(256*fraction)))];
  if(count===layer.count)return false;
  if(count<layer.count){layer.output.fill(0);layer.count=0}
- if(layer.linear){for(let i=layer.count;i<count;i++)layer.output[i]=layer.source[i]}
- else for(let i=layer.count;i<count;i++){const p=layer.order[i];layer.output[p]=layer.source[p]}
- layer.count=count;return true
+ for(let i=layer.count;i<count;i++){const pixel=layer.order[i];layer.output[pixel]=layer.source[pixel]}
+ layer.count=count;return true;
 }
-
 function sceneSeconds(scene){return scene.duration/(scene.speed||1)}
 
-// Recompute only when zoning replaces the stroke array.
-const travelPlans=new WeakMap();
+const physicalTravelPlans=new WeakMap();
 function strokeProgress(scene,fraction){
- if(!scene.lines.length)return {target:0};
- let plan=travelPlans.get(scene.lines);
+ if(!scene.lines.length)return {target:0,tip:null,drawing:false,progress:Math.max(0,Math.min(1,fraction||0))};
+ let plan=physicalTravelPlans.get(scene.lines);
  if(!plan){
   let end=0,previous=null;
   const segments=scene.lines.map(line=>{
@@ -173,33 +129,26 @@ function strokeProgress(scene,fraction){
    for(let i=1;i<points.length;i++)cumulative[i]=cumulative[i-1]+Math.hypot(points[i][0]-points[i-1][0],points[i][1]-points[i-1][1]);
    const gap=previous?Math.hypot(first[0]-previous[0],first[1]-previous[1]):0;
    const begin=end,draw=begin+gap,stroke=Math.max(.01,cumulative.at(-1));
-   end=draw+stroke;
-   const segment={begin,draw,end,previous,first,line,cumulative};previous=points.at(-1);return segment
+   end=draw+stroke;const segment={begin,draw,end,previous,first,line,cumulative};
+   previous=points.at(-1);return segment;
   });
-  plan={segments,end};travelPlans.set(scene.lines,plan)
+  plan={segments,end};physicalTravelPlans.set(scene.lines,plan);
  }
- const fractionClamped=Math.min(1,Math.max(0,Number.isFinite(fraction)?fraction:0));
- const distance=fractionClamped*plan.end;
+ if(!plan.segments.length)return {target:0,tip:null,drawing:false,progress:0};
+ const progress=Math.min(1,Math.max(0,Number.isFinite(fraction)?fraction:0)),travelled=progress*plan.end;
  let low=0,high=plan.segments.length-1;
- while(low<high){const mid=(low+high)>>1;if(distance>=plan.segments[mid].end)low=mid+1;else high=mid}
- const seg=plan.segments[low];
- if(distance<seg.draw){
-  const t=(distance-seg.begin)/(seg.draw-seg.begin);
-  return {target:seg.line.start,tip:seg.first.map((v,i)=>seg.previous[i]+(v-seg.previous[i])*t),drawing:false}
+ while(low<high){const mid=(low+high)>>1;if(travelled>=plan.segments[mid].end)low=mid+1;else high=mid}
+ const segment=plan.segments[low];
+ if(travelled<segment.draw){
+  const ratio=segment.draw>segment.begin?(travelled-segment.begin)/(segment.draw-segment.begin):1;
+  const tip=segment.previous?segment.first.map((v,i)=>segment.previous[i]+(v-segment.previous[i])*ratio):segment.first;
+  return {target:segment.line.start,tip,drawing:false,progress};
  }
- if(fractionClamped===1)return {target:scene.length,tip:seg.line.points.at(-1),drawing:false};
- const along=Math.max(0,distance-seg.draw),lengths=seg.cumulative;
- let left=0,right=lengths.length-1;
- while(left<right){const mid=Math.ceil((left+right)/2);if(lengths[mid]>along)right=mid-1;else left=mid}
- const a=seg.line.points[left],b=seg.line.points[Math.min(left+1,lengths.length-1)];
- const span=(lengths[left+1]||lengths[left])-lengths[left],ratio=span?Math.min(1,(along-lengths[left])/span):0;
- return {target:Math.min(scene.length,seg.line.start+left+ratio),tip:a.map((v,i)=>v+(b[i]-v)*ratio),drawing:true}
-}
-async function prepareColorSchedule(scene){
- if(scene.mode!=='original')return;
- const deadline=Date.now()+15000;
- while(!colorSchedule(scene)){
-  if(Date.now()>deadline){failScheduleWorker();schedules.set(scene.lines,{w:scene.src.width,h:scene.src.height,plan:linearColorSchedule(scene)});break}
-  await new Promise(resolve=>setTimeout(resolve,15))
- }
+ if(progress===1)return {target:scene.length,tip:segment.line.points.at(-1),drawing:false,progress:1};
+ const along=Math.max(0,travelled-segment.draw),cumulative=segment.cumulative;
+ let left=0,right=cumulative.length-1;
+ while(left<right){const mid=(left+right)>>1;if(cumulative[mid]>along)right=mid-1;else left=mid}
+ const a=segment.line.points[left],b=segment.line.points[Math.min(left+1,cumulative.length-1)];
+ const span=cumulative[left+1]===undefined?0:cumulative[left+1]-cumulative[left],ratio=span?Math.min(1,(along-cumulative[left])/span):0;
+ return {target:Math.min(scene.length,segment.line.start+left+ratio),tip:a.map((v,i)=>v+(b[i]-v)*ratio),drawing:true,progress};
 }
