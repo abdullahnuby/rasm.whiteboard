@@ -109,8 +109,8 @@ const grouped={
  src:{width:120,height:60},zones:[],motionStyle:'smart',shapeSequence:'smart',elementDirection:'rtl',
  baseLines:[shapeA,shapeB,shapeC],centerBaseLines:[shapeA,shapeB,shapeC],
  centerShapeGroups:[
-  {id:1,lineIndices:[0,1],componentLabels:[4,5],bounds:{x:68,y:8,width:28,height:5},area:50},
-  {id:2,lineIndices:[2],componentLabels:[6],bounds:{x:18,y:8,width:10,height:5},area:25}
+  {id:1,lineIndices:[0,1],rasterLabels:[1],bounds:{x:68,y:8,width:28,height:5,cx:82,cy:10.5},area:50},
+  {id:2,lineIndices:[2],rasterLabels:[2],bounds:{x:18,y:8,width:10,height:5,cx:23,cy:10.5},area:25}
  ],contourShapeGroups:[],shapeMetrics:{backend:'builtin-components',shapes:2}
 };
 core.applyZones(grouped);
@@ -126,8 +126,8 @@ assert.ok(grouped.shapeGroups[0].bounds.cx<grouped.shapeGroups[1].bounds.cx,
  'LTR element order must draw the leftmost object first');
 assert.equal(grouped.shapeGroups[0].id,1);
 
-assert.deepEqual(Array.from(grouped.shapeGroups[0].rasterComponentLabels),[4,5]);
-assert.deepEqual(Array.from(grouped.shapeGroups[1].rasterComponentLabels),[6]);
+assert.deepEqual(Array.from(grouped.shapeGroups[0].rasterComponentLabels),[1]);
+assert.deepEqual(Array.from(grouped.shapeGroups[1].rasterComponentLabels),[2]);
 grouped.shapeSequence='strokes';core.applyZones(grouped);
 assert.equal(grouped.shapeGroups.length,3,'Stroke mode must expose individual paths');
 assert.ok(grouped.shapeGroups.every(g=>g.pathCount===1));
