@@ -21,7 +21,12 @@ self.onmessage = event => {
       };
       const applied = self.RasmWhiteboardCore.applyToLegacyScene(scene, analysis);
       const plan = applied.plan;
-      self.postMessage({ id, result: { plan } }, [plan.rasterLabels.buffer]);
+      const transfers = [plan.rasterLabels.buffer];
+      for (const line of plan.lines) {
+        const buffer = line.cumulative?.buffer;
+        if (buffer && !transfers.includes(buffer)) transfers.push(buffer);
+      }
+      self.postMessage({ id, result: { plan } }, transfers);
       return;
     }
 
