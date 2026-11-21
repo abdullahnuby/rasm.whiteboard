@@ -76,10 +76,12 @@ const expectedFirstEnd=Math.floor(255*firstGroupSegments.at(-1).end/groupedTrave
 assert.equal(Math.max(...firstShapeTimes),expectedFirstEnd,
  'The first shape must finish exactly at the hand path end of its last stroke');
 
-// Without Worker support, preview must use the fast non-blocking linear fallback.
+// Without Worker support, the synchronous fallback must rebuild a route-aware
+// reveal plan rather than returning the old global row-major pixel order.
 const fallback = vm.runInContext('colorSchedule(scene)', context, { timeout: 5000 });
-assert.equal(fallback.linear, true);
-assert.equal(fallback.order, null);
+assert.equal(fallback.linear, undefined, 'Fallback must not use global row-major reveal');
+assert.equal(fallback.order.length, n, 'Fallback must produce a complete pixel order');
+assert.equal(fallback.ends[256], n, 'Fallback must assign a reveal time to every pixel');
 assert.equal(vm.runInContext('colorSchedule(scene)', context), fallback, 'Fallback should be memoized per scene');
 // The first animation frame can be timestamped slightly before `start`, giving a negative fraction.
 for (const f of [-0.5, -1e-6, NaN, 0, 1, 2]) {
