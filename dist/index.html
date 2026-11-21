@@ -180,12 +180,17 @@
 <option value="contour">تفاصيل دقيقة · تتبّع الحدود</option>
 </select>
 </label>
-<label>تسلسل الأشكال<select id="shapeSequence">
-<option value="smart">تجميع ذكي · أكمل الشكل ثم انتقل</option>
-<option value="strokes">مسارًا بمسار · كل خط مستقل</option>
+<label>وحدة الرسم<select id="shapeSequence">
+<option value="smart">عنصر كامل ثم التالي</option>
+<option value="strokes">كل مسار بصورة مستقلة</option>
 </select>
 </label>
-<small id="shapeStatus">يتم تحليل الصورة وتجميع الخطوط القريبة في أشكال.</small>
+<label>اتجاه ترتيب العناصر<select id="elementDirection">
+<option value="rtl">من اليمين إلى الشمال</option>
+<option value="ltr">من الشمال إلى اليمين</option>
+</select>
+</label>
+<small id="shapeStatus">يتم تقسيم الصورة إلى عناصر مستقلة وترتيبها قبل الرسم.</small>
 <button id="zoneEdit">ترتيب مناطق الرسم</button>
 <details>
 <summary>خيارات المظهر</summary>
