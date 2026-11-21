@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { analyzeRaster, labelConnectedComponents } from "../../.build/index.js";
+import { analyzeRaster, groupComponents, labelConnectedComponents } from "../../.build/index.js";
 
 function raster(width, height, background = 255) {
   const pixels = new Uint8ClampedArray(width * height * 4);
@@ -46,4 +46,20 @@ test("segmentation retains one-pixel marks instead of dropping them as noise", (
   const result = labelConnectedComponents(mask, 12, 12, 1);
   assert.equal(result.components.length, 1);
   assert.equal(result.components[0].area, 1);
+});
+
+
+test("spatial grouping handles thousands of unrelated detached components", () => {
+  const components = [];
+  const columns = 100;
+  for (let index = 0; index < 5000; index++) {
+    const x = (index % columns) * 4;
+    const y = Math.floor(index / columns) * 4;
+    components.push({
+      id: index + 1, area: 1,
+      bounds: { x, y, width: 1, height: 1, cx: x, cy: y }
+    });
+  }
+  const groups = groupComponents(components);
+  assert.equal(groups.length, components.length);
 });

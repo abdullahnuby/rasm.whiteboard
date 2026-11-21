@@ -138,10 +138,40 @@ export function groupComponents(components: ComponentRecord[]): Array<{ id: numb
     return value;
   };
   const join = (a: number, b: number) => { const left = find(a), right = find(b); if (left !== right) parents[right] = left; };
-  for (let i = 0; i < components.length; i++) for (let j = i + 1; j < components.length; j++) {
-    const a = components[i], b = components[j];
-    if (encloses(a.bounds, b.bounds) || encloses(b.bounds, a.bounds) ||
-        attachSmallMark(a, b) || attachSmallMark(b, a)) join(i, j);
+  // Uniform-grid candidate index avoids comparing every component with every
+  // other component on dense drawings. Exact geometric predicates remain the
+  // authority for grouping; the grid only narrows the candidate set.
+  const cellSize = 48;
+  const cells = new Map<string, number[]>();
+  const cellKey = (x: number, y: number) => Math.floor(x / cellSize) + ":" + Math.floor(y / cellSize);
+  components.forEach((component, index) => {
+    const key = cellKey(component.bounds.cx, component.bounds.cy);
+    const bucket = cells.get(key) ?? [];
+    bucket.push(index);
+    cells.set(key, bucket);
+  });
+
+  for (let i = 0; i < components.length; i++) {
+    const parent = components[i], b = parent.bounds;
+    const rangeX = Math.max(5, b.width * 0.45);
+    const rangeY = b.height * 0.5 + Math.max(2.5, b.height * 0.3) + Math.max(7, b.height * 0.55);
+    const minCellX = Math.floor((b.cx - rangeX) / cellSize);
+    const maxCellX = Math.floor((b.cx + rangeX) / cellSize);
+    const minCellY = Math.floor((b.cy - rangeY) / cellSize);
+    const maxCellY = Math.floor((b.cy + rangeY) / cellSize);
+
+    for (let cellY = minCellY; cellY <= maxCellY; cellY++) {
+      for (let cellX = minCellX; cellX <= maxCellX; cellX++) {
+        const candidates = cells.get(cellX + ":" + cellY);
+        if (!candidates) continue;
+        for (const j of candidates) {
+          if (i === j) continue;
+          const candidate = components[j];
+          if (encloses(b, candidate.bounds) || encloses(candidate.bounds, b) ||
+              attachSmallMark(candidate, parent) || attachSmallMark(parent, candidate)) join(i, j);
+        }
+      }
+    }
   }
   const buckets = new Map<number, ComponentRecord[]>();
   components.forEach((component, index) => {

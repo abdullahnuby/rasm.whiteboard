@@ -65,3 +65,22 @@ test("outline tracer returns a path inside the owning component", () => {
     assert.equal(analysis.rasterLabels[py * width + px], component.id);
   }
 });
+
+
+test("partially covered connected elements receive contour supplementation", () => {
+  const width = 64, height = 40, pixels = raster(width, height);
+  rect(pixels, width, 8, 5, 10, 29, [20, 80, 150]);
+  rect(pixels, width, 8, 27, 39, 29, [20, 80, 150]);
+  const analysis = analyzeRaster(pixels, width, height);
+  assert.equal(analysis.components.length, 1);
+  const centerline = [{ id: "vertical-only", points: [[9, 6], [9, 28]], source: "centerline" }];
+  const contour = [{
+    id: "whole-l-outline",
+    points: [[8, 5], [10, 5], [10, 27], [39, 27], [39, 29], [8, 29], [8, 5]],
+    source: "contour"
+  }];
+  const plan = buildDrawingPlan(analysis, centerline, contour, { direction: "ltr" });
+  const contourStrokes = plan.lines.filter(line => line.source === "contour");
+  assert.ok(contourStrokes.length > 0, "Uncovered branches must not be silently dropped");
+  assert.ok(plan.elements[0].diagnostics.warnings.some(warning => warning.includes("coverage")));
+});
