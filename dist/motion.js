@@ -131,9 +131,10 @@ function buildColorSchedule(scene){
  const w=scene.src.width,h=scene.src.height,n=w*h;
  const times=new Uint8Array(n),seen=new Uint8Array(n),queue=new Uint32Array(n);
  let head=0,tail=0;
- for(const line of scene.lines)for(let j=0;j<line.points.length;j++){
-  const x=Math.min(w-1,Math.max(0,Math.round(line.points[j][0]))),y=Math.min(h-1,Math.max(0,Math.round(line.points[j][1]))),p=y*w+x;
-  if(!seen[p]){seen[p]=1;times[p]=Math.floor(230*(line.start+j)/scene.length);queue[tail++]=p}
+ const travel=strokeTravelPlan(scene.lines);
+ for(const segment of travel.segments)for(let j=0;j<segment.line.points.length;j++){
+  const point=segment.line.points[j],x=Math.min(w-1,Math.max(0,Math.round(point[0]))),y=Math.min(h-1,Math.max(0,Math.round(point[1]))),p=y*w+x;
+  if(!seen[p]){seen[p]=1;times[p]=strokeRevealTime(segment,j,travel.end);queue[tail++]=p}
  }
  if(!tail){for(let p=0;p<n;p++)times[p]=Math.floor(255*p/n)}
  while(head<tail){
@@ -161,23 +162,31 @@ function revealPixels(layer,frac){
 
 function sceneSeconds(scene){return scene.duration/(scene.speed||1)}
 
-// Recompute only when zoning replaces the stroke array.
+// The hand and image reveal share one physical travel timeline, including pen lifts.
 const travelPlans=new WeakMap();
+function strokeTravelPlan(lines){
+ let plan=travelPlans.get(lines);
+ if(plan)return plan;
+ let end=0,previous=null;
+ const segments=lines.map(line=>{
+  const points=line.points,first=points[0],cumulative=new Float64Array(points.length);
+  for(let i=1;i<points.length;i++)cumulative[i]=cumulative[i-1]+Math.hypot(points[i][0]-points[i-1][0],points[i][1]-points[i-1][1]);
+  const gap=previous?Math.hypot(first[0]-previous[0],first[1]-previous[1]):0;
+  const begin=end,draw=begin+gap,stroke=Math.max(.01,cumulative.at(-1));
+  end=draw+stroke;
+  const segment={begin,draw,end,previous,first,line,cumulative};
+  previous=points.at(-1);return segment
+ });
+ plan={segments,end};travelPlans.set(lines,plan);return plan
+}
+function strokeRevealTime(segment,pointIndex,totalDistance){
+ if(!(totalDistance>0))return 0;
+ const along=segment.draw+segment.cumulative[Math.min(segment.cumulative.length-1,Math.max(0,pointIndex))];
+ return Math.min(230,Math.floor(230*along/totalDistance))
+}
 function strokeProgress(scene,fraction){
- if(!scene.lines.length)return {target:0};
- let plan=travelPlans.get(scene.lines);
- if(!plan){
-  let end=0,previous=null;
-  const segments=scene.lines.map(line=>{
-   const points=line.points,first=points[0],cumulative=new Float64Array(points.length);
-   for(let i=1;i<points.length;i++)cumulative[i]=cumulative[i-1]+Math.hypot(points[i][0]-points[i-1][0],points[i][1]-points[i-1][1]);
-   const gap=previous?Math.hypot(first[0]-previous[0],first[1]-previous[1]):0;
-   const begin=end,draw=begin+gap,stroke=Math.max(.01,cumulative.at(-1));
-   end=draw+stroke;
-   const segment={begin,draw,end,previous,first,line,cumulative};previous=points.at(-1);return segment
-  });
-  plan={segments,end};travelPlans.set(scene.lines,plan)
- }
+ const plan=strokeTravelPlan(scene.lines);
+ if(!plan.segments.length)return {target:0,progress:0};
  const fractionClamped=Math.min(1,Math.max(0,Number.isFinite(fraction)?fraction:0));
  const distance=fractionClamped*plan.end;
  let low=0,high=plan.segments.length-1;
@@ -185,15 +194,15 @@ function strokeProgress(scene,fraction){
  const seg=plan.segments[low];
  if(distance<seg.draw){
   const t=(distance-seg.begin)/(seg.draw-seg.begin);
-  return {target:seg.line.start,tip:seg.first.map((v,i)=>seg.previous[i]+(v-seg.previous[i])*t),drawing:false}
+  return {target:seg.line.start,tip:seg.first.map((v,i)=>seg.previous[i]+(v-seg.previous[i])*t),drawing:false,progress:fractionClamped}
  }
- if(fractionClamped===1)return {target:scene.length,tip:seg.line.points.at(-1),drawing:false};
+ if(fractionClamped===1)return {target:scene.length,tip:seg.line.points.at(-1),drawing:false,progress:1};
  const along=Math.max(0,distance-seg.draw),lengths=seg.cumulative;
  let left=0,right=lengths.length-1;
  while(left<right){const mid=Math.ceil((left+right)/2);if(lengths[mid]>along)right=mid-1;else left=mid}
  const a=seg.line.points[left],b=seg.line.points[Math.min(left+1,lengths.length-1)];
  const span=(lengths[left+1]||lengths[left])-lengths[left],ratio=span?Math.min(1,(along-lengths[left])/span):0;
- return {target:Math.min(scene.length,seg.line.start+left+ratio),tip:a.map((v,i)=>v+(b[i]-v)*ratio),drawing:true}
+ return {target:Math.min(scene.length,seg.line.start+left+ratio),tip:a.map((v,i)=>v+(b[i]-v)*ratio),drawing:true,progress:fractionClamped}
 }
 async function prepareColorSchedule(scene){
  if(scene.mode!=='original')return;
