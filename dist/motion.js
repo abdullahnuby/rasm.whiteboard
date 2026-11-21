@@ -20,32 +20,29 @@ function overlayEnabled(scene){
  return scene.tone!==2&&scene.sourceHand!=='present'&&(scene.sourceHand!=='detect'||!scene.handHint);
 }
 
-// The UI shell is only an adapter. Engine v2 owns all image and path analysis.
-function applyZones(scene){
- if(!globalThis.RasmWhiteboardCore)throw new Error('RASM Engine v2 is not loaded.');
- return globalThis.RasmWhiteboardCore.applyToLegacyScene(scene).plan;
+// Plan generation is kept off the UI thread. The image Worker owns the expensive
+// component/path assignment and route planning work.
+async function applyZones(scene){
+ if(!globalThis.RasmImageEngine?.planAsync)throw new Error('RASM image Worker is not available.');
+ return globalThis.RasmImageEngine.planAsync(scene);
 }
 
 const revealSchedules=new WeakMap(),revealQueued=new WeakSet(),revealErrors=new WeakMap(),revealJobs=new Map();
 let revealWorker=null,revealRequestId=0;
 
-function buildColorSchedule(scene){
- if(!globalThis.RasmWhiteboardCore)throw new Error('RASM Engine v2 is not loaded.');
- return globalThis.RasmWhiteboardCore.buildLegacyRevealSchedule(scene);
-}
-function rememberSchedule(scene,plan){
- revealSchedules.set(scene.lines,{width:scene.src.width,height:scene.src.height,plan});
- revealErrors.delete(scene.lines);revealQueued.delete(scene.lines);
-}
-function buildSynchronousSchedule(scene){
- try{const plan=buildColorSchedule(scene);rememberSchedule(scene,plan);return plan}
- catch(error){revealErrors.set(scene.lines,error);revealQueued.delete(scene.lines);throw error}
-}
-function failRevealWorker(){
- revealWorker?.terminate();revealWorker=null;
+function buildColorSchedule(scene){ return colorSchedule(scene); }
+const revealSchedules=new WeakMap(),revealQueued=new WeakSet(),revealErrors=new WeakMap(),revealJobs=new Map();
+let revealWorker=null,revealRequestId=0;
+
+function failRevealWorker(reason){
+ const failure=reason instanceof Error?reason:new Error(String(reason||'Reveal Worker stopped unexpectedly.'));
+ const failed=revealWorker;revealWorker=null;
+ try{failed?.terminate()}catch{}
  for(const [id,job] of revealJobs){
+  clearTimeout(job.timer);
   revealJobs.delete(id);
-  try{buildSynchronousSchedule(job.scene)}catch(error){revealErrors.set(job.lines,error)}
+  revealQueued.delete(job.lines);
+  revealErrors.set(job.lines,failure);
  }
 }
 function getRevealWorker(){
@@ -55,11 +52,22 @@ function getRevealWorker(){
   revealWorker=new Worker('motion-worker.js');
   revealWorker.onmessage=event=>{
    const job=revealJobs.get(event.data.id);if(!job)return;
-   revealJobs.delete(event.data.id);revealQueued.delete(job.lines);
-   if(event.data.error){try{buildSynchronousSchedule(job.scene)}catch(error){revealErrors.set(job.lines,error)};return}
+   revealJobs.delete(event.data.id);clearTimeout(job.timer);revealQueued.delete(job.lines);
+   if(event.data.error){
+    revealErrors.set(job.lines,new Error('Reveal Worker could not build the pixel schedule: '+String(event.data.error)));
+    return;
+   }
+   if(!event.data.plan?.order||!event.data.plan?.ends){
+    revealErrors.set(job.lines,new Error('Reveal Worker returned an incomplete pixel schedule.'));
+    return;
+   }
    revealSchedules.set(job.lines,{width:job.width,height:job.height,plan:event.data.plan});
   };
-  revealWorker.onerror=failRevealWorker;
+  revealWorker.onerror=event=>{
+   const detail=event?.message||event?.error?.message||'unknown worker error';
+   failRevealWorker(new Error('Reveal Worker crashed: '+detail));
+  };
+  revealWorker.onmessageerror=()=>failRevealWorker(new Error('Reveal Worker returned an unreadable message.'));
   return revealWorker;
  }catch{return null}
 }
@@ -67,10 +75,22 @@ function requestColorSchedule(scene){
  const lines=scene.lines,width=scene.src.width,height=scene.src.height;
  if(revealSchedules.has(lines)||revealQueued.has(lines))return;
  const worker=getRevealWorker();
- if(!worker){buildSynchronousSchedule(scene);return}
+ if(!worker){
+  const error=new Error('المتصفح لم يتمكن من تشغيل Worker الخاص بجدولة البكسلات. لم يتم تشغيل بديل متزامن حتى لا تتجمد الصفحة.');
+  revealErrors.set(lines,error);throw error;
+ }
  const labels=scene.rasterLabels;
- if(!(labels instanceof Uint32Array)||labels.length!==width*height)throw new Error('RASM Engine v2: raster ownership labels are missing or invalid.');
- const id=++revealRequestId;revealQueued.add(lines);revealJobs.set(id,{scene,lines,width,height});
+ if(!(labels instanceof Uint32Array)||labels.length!==width*height){
+  const error=new Error('RASM Engine v2: raster ownership labels are missing or invalid.');
+  revealErrors.set(lines,error);throw error;
+ }
+ const id=++revealRequestId;revealQueued.add(lines);
+ const job={scene,lines,width,height,timer:null};
+ job.timer=setTimeout(()=>{
+  if(!revealJobs.has(id))return;
+  failRevealWorker(new Error('انتهت مهلة جدولة البكسلات بعد 90 ثانية. أوقفت المهمة بدل تجميد المحرر.'));
+ },90000);
+ revealJobs.set(id,job);
  try{
   const rasterLabels=labels.slice();
   worker.postMessage({
@@ -82,8 +102,8 @@ function requestColorSchedule(scene){
    rasterLabels,
    shapeGroups:(scene.shapeGroups||[]).map(group=>({id:group.id,rasterComponentLabels:group.rasterComponentLabels||[]}))
   },[rasterLabels.buffer]);
- }catch{
-  revealJobs.delete(id);revealQueued.delete(lines);buildSynchronousSchedule(scene);
+ }catch(error){
+  failRevealWorker(new Error('تعذّر إرسال خطة المشهد إلى Reveal Worker: '+String(error?.message||error)));
  }
 }
 function colorSchedule(scene){
@@ -95,19 +115,17 @@ function colorSchedule(scene){
 }
 async function prepareColorSchedule(scene){
  if(scene.mode!=='original')return null;
- const deadline=Date.now()+30000;
- while(!colorSchedule(scene)){
+ const deadline=Date.now()+95000;
+ while(true){
+  const plan=colorSchedule(scene);
+  if(plan)return plan;
   const error=revealErrors.get(scene.lines);if(error)throw error;
   if(Date.now()>deadline){
-   failRevealWorker();
-   if(!revealSchedules.has(scene.lines))buildSynchronousSchedule(scene);
-   break;
+   const error=new Error('محرك جدولة البكسلات لم يستجب خلال 95 ثانية.');
+   failRevealWorker(error);throw error;
   }
-  await new Promise(resolve=>setTimeout(resolve,12));
+  await new Promise(resolve=>setTimeout(resolve,20));
  }
- const plan=revealSchedules.get(scene.lines)?.plan;
- if(!plan)throw new Error('RASM Engine v2 could not prepare a complete reveal schedule.');
- return plan;
 }
 function revealPixels(layer,fraction){
  const count=layer.ends[Math.min(256,Math.max(0,Math.floor(256*fraction)))];
