@@ -40,7 +40,30 @@ async function importMedia(items){
 }
 el('soundFile').onchange=async e=>{const file=e.target.files[0];e.target.value='';await attachRecording(file)};
 el('audioClear').onclick=()=>{stop();soundAsset=soundBuffer=null;showAudio();queueSave()};
-el('play').onclick=async()=>{if(running)return stop();try{await readySound();if(time>=total()-.001)time=0;run()}catch{el('msg').textContent='تعذّر تشغيل الصوت.'}};
+el('play').onclick=async()=>{
+ if(running)return stop();
+ if(loading||recording||!scenes.length)return;
+ const button=el('play');
+ button.disabled=true;button.textContent='…';
+ try{
+  await readySound();
+  const originals=scenes.filter(scene=>scene.mode==='original');
+  if(originals.length){
+   el('msg').textContent='جارٍ تجهيز ترتيب العناصر ومسارات ظهورها…';
+   for(let i=0;i<originals.length;i++){
+    await prepareColorSchedule(originals[i]);
+    el('msg').textContent='تم تجهيز تسلسل الرسم '+(i+1)+' من '+originals.length;
+   }
+  }
+  if(time>=total()-.001)time=0;
+  run();
+ }catch(error){
+  el('msg').textContent='تعذّر تجهيز المعاينة: '+String(error.message||error);
+ }finally{
+  button.disabled=false;
+  if(!running)button.textContent='▶︎';
+ }
+};
 el('copy').onclick=()=>{if(!scenes.length)return;let clone={...scenes[selected],name:scenes[selected].name+' (نسخة)'};scenes.splice(selected+1,0,clone);pick(selected+1);queueSave()};
 function busy(flag){loading=flag;document.querySelector('.workflow').inert=flag;document.querySelector('.grid').inert=flag;document.querySelector('.intro').inert=flag;el('export').disabled=flag||!scenes.length;el('projectMenu').disabled=flag;if(typeof syncDrawer==='function')syncDrawer()}
 function setTitle(value){title=String(value||'مشروع وايت بورد').trim().slice(0,100)||'مشروع وايت بورد';el('titleView').textContent=el('projectName').value=title}
