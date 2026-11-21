@@ -219,15 +219,15 @@ function applyZones(scene){
 // nearest traced edge, so solid fills retain their original RGB values.
 const schedules=new WeakMap(),scheduleQueued=new WeakSet(),scheduleJobs=new Map();
 let scheduleWorker=null,scheduleJobId=0;
-function linearColorSchedule(scene){
- const count=scene.src.width*scene.src.height,ends=new Uint32Array(257);
- for(let t=0;t<=256;t++)ends[t]=Math.floor(count*t/256);
- return {order:null,ends,linear:true}
+function fallbackColorSchedule(scene){
+ // Worker failure must preserve element ownership and hand timing.
+ // Rebuild the same ordered raster plan synchronously instead of scanning rows.
+ return buildColorSchedule(scene)
 }
 function failScheduleWorker(){
  for(const [id,job] of scheduleJobs){
   scheduleJobs.delete(id);scheduleQueued.delete(job.lines);
-  schedules.set(job.lines,{w:job.width,h:job.height,plan:linearColorSchedule(job.scene)});
+  schedules.set(job.lines,{w:job.width,h:job.height,plan:fallbackColorSchedule(job.scene)});
  }
  scheduleWorker?.terminate();scheduleWorker=null;
 }
@@ -239,7 +239,7 @@ function getScheduleWorker(){
   scheduleWorker.onmessage=event=>{
    const job=scheduleJobs.get(event.data.id);if(!job)return;
    scheduleJobs.delete(event.data.id);scheduleQueued.delete(job.lines);
-   const plan=event.data.error?linearColorSchedule(job.scene):event.data.plan;
+   const plan=event.data.error?fallbackColorSchedule(job.scene):event.data.plan;
    schedules.set(job.lines,{w:job.width,h:job.height,plan});
   };
   scheduleWorker.onerror=failScheduleWorker;
@@ -250,7 +250,7 @@ function requestColorSchedule(scene){
  const lines=scene.lines,width=scene.src.width,height=scene.src.height;
  if(scheduleQueued.has(lines))return;
  const worker=getScheduleWorker();
- if(!worker){schedules.set(lines,{w:width,h:height,plan:linearColorSchedule(scene)});return}
+ if(!worker){schedules.set(lines,{w:width,h:height,plan:fallbackColorSchedule(scene)});return}
  const id=++scheduleJobId;scheduleQueued.add(lines);scheduleJobs.set(id,{scene,lines,width,height});
  try{
   const rasterLabels=scene.rasterLabels?.length===width*height?scene.rasterLabels.slice():null;
@@ -258,7 +258,7 @@ function requestColorSchedule(scene){
   worker.postMessage(payload,rasterLabels?[rasterLabels.buffer]:[]);
  }catch{
   scheduleJobs.delete(id);scheduleQueued.delete(lines);
-  schedules.set(lines,{w:width,h:height,plan:linearColorSchedule(scene)});
+  schedules.set(lines,{w:width,h:height,plan:fallbackColorSchedule(scene)});
  }
 }
 function colorSchedule(scene){
@@ -412,7 +412,11 @@ async function prepareColorSchedule(scene){
  if(scene.mode!=='original')return;
  const deadline=Date.now()+15000;
  while(!colorSchedule(scene)){
-  if(Date.now()>deadline){failScheduleWorker();schedules.set(scene.lines,{w:scene.src.width,h:scene.src.height,plan:linearColorSchedule(scene)});break}
+  if(Date.now()>deadline){
+   failScheduleWorker();
+   if(!schedules.has(scene.lines))schedules.set(scene.lines,{w:scene.src.width,h:scene.src.height,plan:fallbackColorSchedule(scene)});
+   break
+  }
   await new Promise(resolve=>setTimeout(resolve,15))
  }
 }
