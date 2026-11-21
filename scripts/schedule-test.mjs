@@ -37,8 +37,8 @@ const revealPlan=vm.runInContext('buildColorSchedule(revealScene)',Object.assign
 const pixelTimes=new Uint16Array(128*32);
 for(let t=0;t<256;t++)for(let k=revealPlan.ends[t];k<revealPlan.ends[t+1];k++)pixelTimes[revealPlan.order[k]]=t;
 assert.equal(pixelTimes[16*128+11],2);
-assert.equal(pixelTimes[16*128+90],184);
-assert.equal(pixelTimes[16*128+110],230);
+assert.equal(pixelTimes[16*128+90],204);
+assert.equal(pixelTimes[16*128+110],255);
 
 // The same raster route is now segmented into two separate shapes. Pixels in
 // the second object must not be claimed by the first object's flood fill.
@@ -72,7 +72,7 @@ assert.ok(Math.max(...firstShapeTimes)<Math.min(...secondShapeTimes),
  'Every pixel in the first shape must finish revealing before the next shape starts');
 
 const firstGroupSegments=groupedTravel.segments.filter(segment=>segment.line.shapeId===1);
-const expectedFirstEnd=Math.floor(230*firstGroupSegments.at(-1).end/groupedTravel.end);
+const expectedFirstEnd=Math.floor(255*firstGroupSegments.at(-1).end/groupedTravel.end);
 assert.equal(Math.max(...firstShapeTimes),expectedFirstEnd,
  'The first shape must finish exactly at the hand path end of its last stroke');
 
