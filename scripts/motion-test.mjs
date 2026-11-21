@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
-const core=vm.runInNewContext((await readFile('dist/motion.js','utf8'))+';({edgeSkinRegion,overlayEnabled,applyZones,sceneSeconds,strokeProgress,strokeTravelPlan,strokeRevealTime})');
+const core=vm.runInNewContext((await readFile('dist/motion.js','utf8'))+';({edgeSkinRegion,overlayEnabled,applyZones,sceneSeconds,strokeProgress,strokeTravelPlan,strokeRevealTime,routeStrokes,orderShapeGroups})');
 const pixels=new Uint8ClampedArray(100*100*4).fill(255);
 assert.equal(core.edgeSkinRegion(pixels,100,100),false);
 for(let y=30;y<100;y++)for(let x=42;x<68;x++)pixels.set([163,109,82,255],(y*100+x)*4);
@@ -94,9 +94,17 @@ const routed=vm.runInNewContext((await readFile('dist/motion.js','utf8'))+';rout
 const far={points:[[90,0],[100,0]]},close={points:[[12,0],[20,0]]},origin={points:[[0,0],[10,0]]};
 const route=routed([origin,far,close]);
 assert.equal(route[1].points,close.points,'Nearby strokes must precede distant strokes');
+const horizontalLeft={id:'left',points:[[0,0],[10,0]]},horizontalRight={id:'right',points:[[90,0],[100,0]]};
+const rtlRoute=core.routeStrokes([horizontalLeft,horizontalRight],'rtl');
+const ltrRoute=core.routeStrokes([horizontalLeft,horizontalRight],'ltr');
+assert.equal(rtlRoute[0].points[0][0],100,'RTL route should start at the rightmost end');
+assert.equal(ltrRoute[0].points[0][0],0,'LTR route should start at the leftmost end');
+const row=[{id:'left',bounds:{x:4,y:0,width:8,height:8,cx:8,cy:4}},{id:'right',bounds:{x:80,y:0,width:8,height:8,cx:84,cy:4}}];
+assert.deepEqual(Array.from(core.orderShapeGroups(row,'rtl').map(g=>g.id)),['right','left']);
+assert.deepEqual(Array.from(core.orderShapeGroups(row,'ltr').map(g=>g.id)),['left','right']);
 const shapeA={points:[[90,10],[95,10]]},shapeB={points:[[70,10],[75,10]]},shapeC={points:[[20,10],[25,10]]};
 const grouped={
- src:{width:120,height:60},zones:[],motionStyle:'smart',shapeSequence:'smart',
+ src:{width:120,height:60},zones:[],motionStyle:'smart',shapeSequence:'smart',elementDirection:'rtl',
  baseLines:[shapeA,shapeB,shapeC],centerBaseLines:[shapeA,shapeB,shapeC],
  centerShapeGroups:[
   {id:1,lineIndices:[0,1],componentLabels:[4,5],bounds:{x:68,y:8,width:28,height:5},area:50},
@@ -108,6 +116,14 @@ assert.equal(grouped.shapeGroups.length,2,'Smart sequencing must keep related pa
 assert.deepEqual(Array.from(grouped.shapeGroups.map(g=>g.pathCount)),[2,1]);
 assert.equal(grouped.lines[0].shapeId,1);
 assert.equal(grouped.lines.at(-1).shapeId,2);
+assert.ok(grouped.shapeGroups[0].bounds.cx>grouped.shapeGroups[1].bounds.cx,
+ 'RTL element order must draw the rightmost object first');
+assert.deepEqual(Array.from(grouped.shapeGroups[0].rasterComponentLabels),[1]);
+grouped.elementDirection='ltr';core.applyZones(grouped);
+assert.ok(grouped.shapeGroups[0].bounds.cx<grouped.shapeGroups[1].bounds.cx,
+ 'LTR element order must draw the leftmost object first');
+assert.equal(grouped.shapeGroups[0].id,1);
+
 assert.deepEqual(Array.from(grouped.shapeGroups[0].rasterComponentLabels),[4,5]);
 assert.deepEqual(Array.from(grouped.shapeGroups[1].rasterComponentLabels),[6]);
 grouped.shapeSequence='strokes';core.applyZones(grouped);
