@@ -44,5 +44,8 @@ assert.ok(motionSource.includes('انتهت مهلة جدولة البكسلات
 assert.ok(imageEngineSource.includes('async function planAsync(scene)'), 'Image engine must expose Worker-backed planning');
 assert.ok(imageEngineSource.includes('timed out after'), 'Image worker requests must have a watchdog');
 assert.ok(imageWorkerSource.includes("action === 'plan'"), 'Image worker must accept off-thread plan requests');
+assert.ok(imageEngineSource.includes('cancelPending'), 'Image worker tasks must support explicit cancellation');
+assert.ok(appSource.includes('cancelPending?.'), 'Batch cancellation must stop the active image worker task');
+assert.ok(appSource.includes('items.length?[items[0]]:[]'), 'Initial prewarming must not schedule all imported scenes at once');
 assert.ok(appSource.includes('await applyZones(scene)'), 'Import must await Worker-based planning');
 assert.ok(appSource.includes('تفاصيل أول الأخطاء'), 'Import failures must display actionable causes');
