@@ -11,7 +11,6 @@
     "dev": "node scripts/serve.mjs"
   },
   "dependencies": {
-    "@techstark/opencv-js": "5.0.0-release.1",
     "paper": "0.17.0"
   },
   "devDependencies": {

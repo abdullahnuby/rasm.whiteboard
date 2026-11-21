@@ -21,7 +21,7 @@ The old implementation split image extraction, line ordering, raster reveal, pre
 - Group only explicit relationships: small aligned marks attached to a base glyph, and components geometrically enclosed by a larger outline.
 - Components that are merely adjacent remain separate.
 
-The segmentation backend is replaceable. The deterministic JavaScript 8-connected implementation is the reference backend; OpenCV.js can be used as an optional accelerator and must pass the same fixture suite.
+The segmentation backend is replaceable. The deterministic JavaScript 8-connected implementation is the reference backend; An OpenCV.js implementation may be injected as an optional accelerator; it is not bundled or loaded by the editor by default and must pass the same fixture suite.
 
 ### 2. Path ownership
 

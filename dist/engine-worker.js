@@ -1,6 +1,5 @@
 'use strict';
 try { importScripts('vendor/paper-core.js'); } catch { /* Paper.js simplification is optional in workers. */ }
-try { importScripts('vendor/paper-core.js'); } catch { /* Paper.js route simplification is optional. */ }
 importScripts('engine-v2.js','engine.js');
 self.onmessage = event => {
   const { id, width, height, pixels } = event.data || {};

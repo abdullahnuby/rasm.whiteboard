@@ -22,7 +22,6 @@ async function copyFirst(candidates, target, minimumBytes) {
   return { file: target, source: selected, bytes: data.byteLength, sha256: createHash("sha256").update(data).digest("hex") };
 }
 
-const opencv = await copyFirst(["node_modules/@techstark/opencv-js/dist/opencv.js"], "opencv.js", 8_000_000);
 const paper = await copyFirst([
   "node_modules/paper/dist/paper-core.min.js",
   "node_modules/paper/dist/paper-core.js",
@@ -37,14 +36,11 @@ async function license(candidates) {
   throw new Error("Third-party license file missing: " + candidates.join(" or "));
 }
 
-const opencvLicense = await license(["node_modules/@techstark/opencv-js/LICENSE", "node_modules/@techstark/opencv-js/LICENSE.txt"]);
 const paperLicense = await license(["node_modules/paper/LICENSE.txt", "node_modules/paper/LICENSE"]);
 await writeFile(resolve(destination, "THIRD-PARTY-LICENSES.md"),
-  "# Third-party browser engines\n\n## OpenCV.js 5.0.0 — Apache-2.0\n\n" + opencvLicense +
-  "\n\n## Paper.js 0.17.0 — MIT\n\n" + paperLicense);
+  "# Third-party browser engines\n\n## Paper.js 0.17.0 — MIT\n\n" + paperLicense);
 const manifest = {
-  opencv: { version: "5.0.0-release.1", license: "Apache-2.0", ...opencv },
   paper: { version: "0.17.0", license: "MIT", ...paper }
 };
 await writeFile(resolve(destination, "dependencies.json"), JSON.stringify(manifest, null, 2) + "\n");
-console.log("RASM local browser dependencies vendored:", JSON.stringify({ opencv: opencv.bytes, paper: paper.bytes }));
+console.log("RASM local browser dependencies vendored:", JSON.stringify({ paper: paper.bytes }));

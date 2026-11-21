@@ -16,7 +16,9 @@ This is a structural replacement of the image-to-whiteboard pipeline, while pres
 10. Every scene can produce a downloadable JSON diagnostic report.
 
 ## New automated coverage
-- Foreground mask, 8-connected components, detached small-mark grouping and one-pixel preservation.
+- Foreground mask, 8-connected components, detached small-mark grouping, one-pixel preservation, and a 5,000-component spatial-grouping stress fixture.
+- Partial centreline coverage detection and contour supplementation for connected elements whose route only covers part of their raster shape.
+- Removal of the unused bundled OpenCV.js dependency; deterministic JavaScript segmentation is the default, while an injected OpenCV backend remains optional.
 - Path ownership assignment and splitting of one vector path crossing multiple raster components.
 - RTL/LTR whole-element order.
 - Centerline-missing route recovery by tracing the component's own raster outline.
@@ -31,3 +33,10 @@ This is a structural replacement of the image-to-whiteboard pipeline, while pres
 Automated tests use controlled synthetic rasters and vector paths; they establish architectural invariants but do not prove semantic recognition of every artistic composition. Visually connected Arabic writing may form one raster component, and images with textured/photographic backgrounds are kept as one explicitly diagnosed canvas element. Real iPhone/Safari playback and export still require user acceptance with the actual project.
 
 No production merge is claimed by this report.
+
+
+## Follow-up engineering fixes
+- Replaced the all-pairs component grouping loop with a uniform-grid candidate index; exact enclosure and small-mark predicates remain authoritative.
+- Added a raster-neighbourhood coverage measurement so a single centreline no longer suppresses contour paths for uncovered branches of the same connected element.
+- Removed the unused OpenCV.js package and generated browser payload from the default build; an injected backend remains optional without forcing an 8 MB+ asset into deployment.
+- Removed a duplicate Paper.js worker import.
