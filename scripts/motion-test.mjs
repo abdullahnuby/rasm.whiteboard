@@ -99,8 +99,8 @@ const grouped={
  src:{width:120,height:60},zones:[],motionStyle:'smart',shapeSequence:'smart',
  baseLines:[shapeA,shapeB,shapeC],centerBaseLines:[shapeA,shapeB,shapeC],
  centerShapeGroups:[
-  {id:1,lineIndices:[0,1],bounds:{x:68,y:8,width:28,height:5},area:50},
-  {id:2,lineIndices:[2],bounds:{x:18,y:8,width:10,height:5},area:25}
+  {id:1,lineIndices:[0,1],componentLabels:[4,5],bounds:{x:68,y:8,width:28,height:5},area:50},
+  {id:2,lineIndices:[2],componentLabels:[6],bounds:{x:18,y:8,width:10,height:5},area:25}
  ],contourShapeGroups:[],shapeMetrics:{backend:'builtin-components',shapes:2}
 };
 core.applyZones(grouped);
@@ -108,6 +108,8 @@ assert.equal(grouped.shapeGroups.length,2,'Smart sequencing must keep related pa
 assert.deepEqual(Array.from(grouped.shapeGroups.map(g=>g.pathCount)),[2,1]);
 assert.equal(grouped.lines[0].shapeId,1);
 assert.equal(grouped.lines.at(-1).shapeId,2);
+assert.deepEqual(Array.from(grouped.shapeGroups[0].rasterComponentLabels),[4,5]);
+assert.deepEqual(Array.from(grouped.shapeGroups[1].rasterComponentLabels),[6]);
 grouped.shapeSequence='strokes';core.applyZones(grouped);
 assert.equal(grouped.shapeGroups.length,3,'Stroke mode must expose individual paths');
 assert.ok(grouped.shapeGroups.every(g=>g.pathCount===1));
