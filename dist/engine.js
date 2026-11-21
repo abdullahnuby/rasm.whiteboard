@@ -553,5 +553,8 @@
       plan.lines.some(line => line.source === 'centerline');
     return plan;
   }
-  root.RasmImageEngine = { analyze, analyzeAsync, planAsync, extractPaths, simplifyPolyline, resamplePolyline };
+  function cancelPending(reason = 'Image processing cancelled by the user.') {
+    failWorker(new Error(String(reason)));
+  }
+  root.RasmImageEngine = { analyze, analyzeAsync, planAsync, cancelPending, extractPaths, simplifyPolyline, resamplePolyline };
 })(typeof self !== 'undefined' ? self : (typeof window !== 'undefined' ? window : globalThis));
