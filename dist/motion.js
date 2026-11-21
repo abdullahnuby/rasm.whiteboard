@@ -31,8 +31,6 @@ const revealSchedules=new WeakMap(),revealQueued=new WeakSet(),revealErrors=new 
 let revealWorker=null,revealRequestId=0;
 
 function buildColorSchedule(scene){ return colorSchedule(scene); }
-const revealSchedules=new WeakMap(),revealQueued=new WeakSet(),revealErrors=new WeakMap(),revealJobs=new Map();
-let revealWorker=null,revealRequestId=0;
 
 function failRevealWorker(reason){
  const failure=reason instanceof Error?reason:new Error(String(reason||'Reveal Worker stopped unexpectedly.'));
