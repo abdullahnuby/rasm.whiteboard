@@ -141,7 +141,8 @@ function applyZones(scene){
   scene.shapeGroups.push({
    id:index+1,name:shape.name||('شكل '+(index+1)),bounds:shape.bounds||null,
    area:shape.area||0,pathCount:routed.length,pathStart,pathEnd:start,
-   travelLength,source:shape.source||'detected-component'
+   travelLength,rasterComponentLabels:[...(shape.componentLabels||[])],
+   source:shape.source||'detected-component'
   });
  });
  scene.length=start;scene.usingCenterline=center;
@@ -238,6 +239,38 @@ function buildColorSchedule(scene){
   for(let p=0;p<n;p++){
    if(labels[p]&&!seen[p])times[p]=230;
    else if(!labels[p])times[p]=255;
+  }
+  // Give every detected shape its own reveal interval. The first pixel in a
+  // shape can appear when its first stroke starts, but its final pixels are
+  // guaranteed to reach 100% only when the hand finishes that shape's last
+  // stroke. The next shape's interval starts after pen-lift travel.
+  if(scene.shapeSequence!=='strokes'&&Array.isArray(scene.shapeGroups)&&scene.shapeGroups.length){
+   const windows=new Map();
+   for(const group of scene.shapeGroups){
+    const owned=travel.segments.filter(segment=>segment.line.shapeId===group.id);
+    if(!owned.length)continue;
+    windows.set(group.id,{start:owned[0].begin/travel.end,end:owned[owned.length-1].end/travel.end});
+   }
+   const labelWindows=new Map();
+   for(const group of scene.shapeGroups){
+    const window=windows.get(group.id);
+    if(!window)continue;
+    for(const componentLabel of group.rasterComponentLabels||[])labelWindows.set(componentLabel,window);
+   }
+   const ranges=new Map();
+   for(let p=0;p<n;p++){
+    const label=labels[p];if(!label||!labelWindows.has(label))continue;
+    let range=ranges.get(label);
+    if(!range){range={min:255,max:0};ranges.set(label,range)}
+    range.min=Math.min(range.min,times[p]);range.max=Math.max(range.max,times[p]);
+   }
+   for(let p=0;p<n;p++){
+    const label=labels[p],window=labelWindows.get(label);if(!window)continue;
+    const range=ranges.get(label);
+    const local=range&&range.max>range.min?(times[p]-range.min)/(range.max-range.min):1;
+    const progress=window.start+Math.max(0,Math.min(1,local))*(window.end-window.start);
+    times[p]=Math.min(230,Math.max(0,Math.floor(progress*230)));
+   }
   }
  }else if(tail){
   // Legacy full-canvas propagation remains available for photos or low-contrast images.
