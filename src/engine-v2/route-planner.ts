@@ -11,7 +11,13 @@ interface Endpoint {
   strokeIndex: number;
   reverse: boolean;
 }
-interface EndpointNode extends Endpoint {
+interface EndpointBucket {
+  x: number;
+  y: number;
+  entries: Endpoint[];
+  cursor: number;
+}
+interface EndpointNode extends EndpointBucket {
   minX: number;
   maxX: number;
   minY: number;
@@ -20,7 +26,7 @@ interface EndpointNode extends Endpoint {
   right: EndpointNode | null;
 }
 
-function buildEndpointTree(items: Endpoint[]): EndpointNode | null {
+function buildEndpointTree(items: EndpointBucket[]): EndpointNode | null {
   if (!items.length) return null;
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   for (const item of items) {
@@ -28,8 +34,7 @@ function buildEndpointTree(items: Endpoint[]): EndpointNode | null {
     minY = Math.min(minY, item.y); maxY = Math.max(maxY, item.y);
   }
   const axis = maxX - minX >= maxY - minY ? "x" : "y";
-  items.sort((a, b) => a[axis] - b[axis] ||
-    a.strokeIndex - b.strokeIndex || Number(a.reverse) - Number(b.reverse));
+  items.sort((a, b) => a[axis] - b[axis] || a[axis === "x" ? "y" : "x"] - b[axis === "x" ? "y" : "x"]);
   const middle = items.length >> 1, point = items[middle];
   const left = buildEndpointTree(items.slice(0, middle));
   const right = buildEndpointTree(items.slice(middle + 1));
@@ -58,15 +63,19 @@ function findNearestEndpoint(
   node: EndpointNode | null, cursor: Point, used: Uint8Array, best: NearestEndpoint
 ): void {
   if (!node || distanceToBounds(cursor, node) > best.distanceSquared) return;
-  if (!used[node.strokeIndex]) {
+  // Equal-position endpoints share a bucket. Advance its cursor only past
+  // already-selected strokes, so dense coincident junctions are not rescanned.
+  while (node.cursor < node.entries.length && used[node.entries[node.cursor].strokeIndex]) node.cursor++;
+  const endpoint = node.entries[node.cursor];
+  if (endpoint) {
     const dx = cursor[0] - node.x, dy = cursor[1] - node.y;
     const squared = dx * dx + dy * dy;
     if (squared < best.distanceSquared ||
       (squared === best.distanceSquared &&
-        (node.strokeIndex < best.strokeIndex ||
-          (node.strokeIndex === best.strokeIndex && !node.reverse && best.reverse)))) {
-      best.strokeIndex = node.strokeIndex;
-      best.reverse = node.reverse;
+        (endpoint.strokeIndex < best.strokeIndex ||
+          (endpoint.strokeIndex === best.strokeIndex && !endpoint.reverse && best.reverse)))) {
+      best.strokeIndex = endpoint.strokeIndex;
+      best.reverse = endpoint.reverse;
       best.distanceSquared = squared;
     }
   }
@@ -99,16 +108,27 @@ export function routeElementStrokes(strokes: readonly StrokePath[], direction: D
   // The previous nearest-endpoint scan compared every remaining stroke after
   // every selection (O(n²)). A balanced spatial index keeps large drawings
   // responsive while preserving the same greedy nearest-endpoint route.
-  const endpoints: Endpoint[] = [];
+  const endpointMap = new Map<string, EndpointBucket>();
   for (let index = 0; index < strokes.length; index++) {
     const points = strokes[index].points;
     const first = points[0], last = points[points.length - 1];
-    endpoints.push(
+    for (const endpoint of [
       { x: first[0], y: first[1], strokeIndex: index, reverse: false },
       { x: last[0], y: last[1], strokeIndex: index, reverse: true }
-    );
+    ]) {
+      const key = endpoint.x + "," + endpoint.y;
+      let bucket = endpointMap.get(key);
+      if (!bucket) {
+        bucket = { x: endpoint.x, y: endpoint.y, entries: [], cursor: 0 };
+        endpointMap.set(key, bucket);
+      }
+      bucket.entries.push(endpoint);
+    }
   }
-  const endpointTree = buildEndpointTree(endpoints);
+  for (const bucket of endpointMap.values()) {
+    bucket.entries.sort((a, b) => a.strokeIndex - b.strokeIndex || Number(a.reverse) - Number(b.reverse));
+  }
+  const endpointTree = buildEndpointTree([...endpointMap.values()]);
   const used = new Uint8Array(strokes.length);
   used[firstIndex] = 1;
   const ordered: StrokePath[] = [];
