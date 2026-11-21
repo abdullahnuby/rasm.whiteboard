@@ -1,3 +1,11 @@
+# 5.2.0 — Shape-aware writing engine
+- Add a locally bundled OpenCV.js 5.0.0 computer-vision runtime for morphological closing and connected-component segmentation.
+- Add Paper.js 0.17.0 vector geometry refinement for centerline and contour path simplification.
+- Group disconnected glyph parts and nearby marks into shape-level units, then route strokes inside each shape before advancing to the next.
+- Export compact per-pixel shape ownership labels and isolate raster reveal propagation inside the owning shape.
+- Add a per-scene sequence control: smart shape grouping or individual stroke sequencing. Preserve the setting in .rasm projects.
+- Vendor pinned browser engines into dist/vendor during build and include third-party license notices and asset hashes.
+
 ## 5.1.1 — Synchronize image reveal with the hand
 - Use one physical travel timeline for pen movement and pixel reveal, including the distance travelled between separate strokes.
 - Timestamp reveal seeds by cumulative path distance rather than point count, preventing image/hand drift on unevenly sampled paths.
