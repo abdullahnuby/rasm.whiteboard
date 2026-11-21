@@ -1,9 +1,21 @@
 {
   "name": "rasm-whiteboard-studio",
-  "version": "5.1.0",
+  "version": "6.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "build": "node --check dist/engine.js && node --check dist/engine-worker.js && node --check dist/motion-worker.js && node scripts/motion-worker-test.mjs && node --check dist/app.js && node --check dist/project.js && node --check dist/motion.js && node --check dist/zones.js && node scripts/check.mjs && node scripts/motion-test.mjs && node scripts/engine-test.mjs && node scripts/schedule-test.mjs && node --check dist/reliability.js && node scripts/reliability-test.mjs && node --check dist/timeline.js && node scripts/timeline-test.mjs && node --check dist/export.js && node scripts/export-test.mjs && node --check dist/offline-export.js && node --check dist/live-export.js && node --check dist/interface.js && node scripts/serve-test.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "bundle:engine": "node scripts/build-engine-v2.mjs",
+    "test:engine-v2": "npm run bundle:engine && node --test tests/engine-v2/*.test.mjs",
+    "build": "node scripts/vendor-assets.mjs && npm run typecheck && npm run test:engine-v2 && node --check dist/engine-v2.js && node --check dist/engine.js && node --check dist/engine-worker.js && node --check dist/motion-worker.js && node scripts/motion-worker-test.mjs && node --check dist/app.js && node --check dist/project.js && node --check dist/motion.js && node --check dist/zones.js && node scripts/check.mjs && node scripts/vendor-test.mjs && node scripts/engine-test.mjs && node scripts/schedule-test.mjs && node --check dist/reliability.js && node scripts/reliability-test.mjs && node --check dist/timeline.js && node scripts/timeline-test.mjs && node --check dist/export.js && node scripts/export-test.mjs && node --check dist/offline-export.js && node --check dist/live-export.js && node --check dist/interface.js && node scripts/serve-test.mjs",
     "dev": "node scripts/serve.mjs"
+  },
+  "dependencies": {
+    "@techstark/opencv-js": "5.0.0-release.1",
+    "paper": "0.17.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2"
   }
 }
