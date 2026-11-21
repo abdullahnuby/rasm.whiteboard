@@ -1,3 +1,10 @@
+# Unreleased — Engine v2 reliability follow-up
+- Replace all-pairs element grouping with spatial indexes partitioned by component scale and area, including dense-cell candidate pruning.
+- Measure raster neighbourhood coverage before accepting a centreline as a complete component route; supplement uncovered connected branches with contour paths.
+- Add regression fixtures for 5,000 clustered components and partial centreline coverage.
+- Remove the unused OpenCV.js production payload, keep the injected accelerator hook optional, and align local asset tests with shipped dependencies.
+- Remove a duplicate Paper.js worker import.
+
 # 6.0.0 — RASM Engine v2
 - Introduce a modular TypeScript engine with strict contracts for raster analysis, connected components, drawable elements, vector-path ownership, route planning, pixel reveal scheduling and diagnostics.
 - Replace global longest-stroke selection and bounding-box proximity routing with per-component path ownership; vector paths are split when they cross component ownership.
