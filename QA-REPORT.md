@@ -1,42 +1,33 @@
-# مراجعة رَسم Studio 5.1
-المرجع هو نسخة 4.4.0 من الأرشيف rasm.whiteboard-main.zip الذي أرسله المستخدم.
+# RASM Studio 6.0 — Engine v2 validation
 
-## المشاكل التي عولجت
-- خادم التطوير كان يستبعد reliability.js وtimeline.js وexport.js وmotion-worker.js. أصبح يقدّم جميع ملفات dist مع نوع المحتوى الصحيح، ويفهم منفذ --port المستخدم في المعاينة.
-- التصدير كان يعتمد على requestAnimationFrame مع طلبات التقاط يدوية منفصلة. استُبدل المسار الافتراضي بترميز كل إطار بتوقيت صريح، مع انتظار قدرة المرمّز على استقبال الإطار التالي.
-- تمت تهيئة جداول ألوان جميع المشاهد قبل التصدير، مع حد انتظار واستجابة بديلة عند تعطل Worker.
-- أصبح التصدير يتيح الإلغاء وإعادة المحاولة، ويعيد تحرير الواجهة والموارد بعد النجاح أو الفشل.
-- أصبح انتقال اليد محسوبًا بطول المسار الحقيقي، وترتيب الخطوط يعتمد على قرب أطرافها. الرسم الملوّن الهادئ يستخدم المسارات الرئيسية لتخفيف تتبع التفاصيل الصغيرة.
-- أصبحت بداية الاستخدام واضحة، مع أقسام مستقلة للمشهد والتوقيت واليد والتصدير، وتنبيه لاختلاف مدة الصوت والفيديو.
-- تم الحفاظ على محرك استخلاص الصور، والمخطط القابل لتغيير المدة، والمعالجة في Workers، واستعادة المشروعات، والنسخ المستردة من التعديلات المرفوعة.
+## Scope
+This is a structural replacement of the image-to-whiteboard pipeline, while preserving the existing editor shell, audio, timeline, export controls and .rasm project restore path.
 
-## فحوص الكود
-اجتازت اختبارات محركات الصور والحركة وجدولة الألوان، وعمّال المعالجة، والذاكرة والاصطفاف، وتوقيت المشاهد، وربط عناصر الواجهة، وامتدادات التصدير. أُضيف اختبار للمسافات غير المتساوية بين نقاط المسار، واختبار لخدمة جميع موارد الصفحة والوحدات والعمّال والخطوط ومكتبة التصدير عبر HTTP.
+## Architecture invariants
+1. Every foreground raster component has one stable numeric label.
+2. Every component belongs to exactly one drawable element.
+3. Every extracted vector path is assigned to a component or retained as a separately diagnosed orphan; paths are not assigned to the nearest unrelated object.
+4. A vector path crossing component ownership is split into owned path segments.
+5. Every foreground component needs a pen-path seed. Missing centerlines use contour paths or a traced raster boundary; missing seeds are reported and do not trigger a row-major reveal.
+6. Each element has a single hand-arrival-to-final-stroke window. Its raster pixels reveal only inside that element and component window.
+7. Pen-up movement contributes to the same physical time as pen-down movement.
+8. The main thread and Worker use the same Engine v2 reveal scheduler.
+9. The preview and both export paths consume the same scene plan and normalized time.
+10. Every scene can produce a downloadable JSON diagnostic report.
 
-## اختبارات المتصفح والملفات الناتجة
-- استعادة مشروع محفوظ سابقًا، بصوره وتسجيله.
-- تصدير 4 مشاهد مع تسجيل مدته نحو 71.6 ثانية بدقة 1280×720.
-- استيراد 6 صور بأسماء مرقّمة وبترتيب اختيار مختلط، ثم التحقق من ترتيبها الصحيح.
-- مطابقة مدة المشاهد مع التسجيل وتصدير 6 مشاهد بدقة 1920×1080.
-- نتج ملف WebM بفيديو VP8 وصوت Opus، ومدته 71.640 ثانية، مع 1720 إطار فيديو قابلًا للفك.
-- مقارنات بكسلات بين بداية ووسط ونهاية كل مشهد أكدت تغير الصورة داخل المشاهد الستة، بما فيها المشهد الأخير.
-- إلغاء التصدير ثم إعادة المحاولة.
-- اختبار الحفظ وإعادة فتح المشروع تم خلال السيناريوهات السابقة.
-- تشغيل المحرك المتوافق على 6 مشاهد مع التسجيل لمدة 71.6 ثانية بدقة 720p. ملفه يحتوي على VP9 وصوت Opus.
-- فحص الواجهة داخل عرض 390 بكسل على Chromium، مع التحقق من عدم وجود تمدد أفقي للصفحة.
-- تجربة البدء بمشروع جديد والاحتفاظ بالنسخة السابقة، وتجربة المثال المرفق، وتغيير المدة المباشر من لوحة التوقيت.
+## New automated coverage
+- Foreground mask, 8-connected components, detached small-mark grouping and one-pixel preservation.
+- Path ownership assignment and splitting of one vector path crossing multiple raster components.
+- RTL/LTR whole-element order.
+- Centerline-missing route recovery by tracing the component's own raster outline.
+- Complete first-element reveal before second-element reveal.
+- Hard failure when a component has no pen path, rather than delayed appearance at scene end.
+- Worker transfer contract, copied raster-label ownership and element-level schedule integration.
+- Single physical hand-progress clock, pen-up interpolation and no legacy independent reveal timing.
+- Static build guards for no top-down crop and playback readiness.
+- Existing image engine, project restore, audio, timeline, reliability, export and development-server tests.
 
-## حدود التحقق
-الاختبار العملي على Chrome/Linux. صيغة MP4 تعتمد على توفر AVC/AAC في المتصفح. يلزم اختبار Safari/iPhone على جهاز فعلي. صور الاختبار الست رسوم هندسية ملونة مصطنعة لاختبار الحركة والترتيب. لم تُرفق صور مشروع المستخدم النهائي ضمن الأرشيف، لذلك لم يُختبر ذلك المحتوى بعينه.
+## Validation boundary
+Automated tests use controlled synthetic rasters and vector paths; they establish architectural invariants but do not prove semantic recognition of every artistic composition. Visually connected Arabic writing may form one raster component, and images with textured/photographic backgrounds are kept as one explicitly diagnosed canvas element. Real iPhone/Safari playback and export still require user acceptance with the actual project.
 
-## مراجعة واجهة 5.1
-- فتح القائمة الجانبية وتعديل مدة المشهد منها والتحقق من تحديث المخطط.
-- الانتقال من القائمة إلى إدارة المشروع والعودة.
-- تغيير عرض مساحة العمل بين 390 و1100 و320 بكسل. تُستخدم لوحة خصائص واحدة، وتُغلق القائمة عند الانتقال إلى الكمبيوتر.
-- عرض القائمة على شاشة 320 بكسل دون تمدد أفقي. عرض محتواها يساوي عرضها، وعرض الصفحة يساوي عرض مساحة العرض.
-- تشغيل التصدير من القائمة الجانبية، والتحقق من إغلاقها وإظهار حالة المعالجة.
-- إضافة زر تنزيل مباشر إلى بطاقة نتيجة التصدير.
-
-- اختبار الاستيراد من القائمة واستبدال المثال بصورة جديدة.
-- التصدير من القائمة بالمحرك الدقيق أنتج 144 إطارًا لفيديو مدته 6 ثوانٍ.
-- توضيح أن الفيديو الناتج يصبح نسخة سابقة بعد تعديل المشروع، لتجنب اعتباره نتيجة التعديلات الجديدة.
+No production merge is claimed by this report.
