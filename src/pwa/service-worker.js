@@ -2,7 +2,7 @@
 // Build-generated RASM_OFFLINE contains only this app's fixed static assets.
 const PREFIX='rasm-static-'+encodeURIComponent(self.registration.scope)+'-',CORE=PREFIX+RASM_OFFLINE.version,OPTIONAL=PREFIX+'optional-'+RASM_OFFLINE.version;
 const absolute=path=>new URL(path,self.registration.scope).href;
-const coreURLs=new Set(RASM_OFFLINE.core.map(absolute)),optionalURLs=new Set(RASM_OFFLINE.optional.map(absolute));
+const coreURLs=new Set(RASM_OFFLINE.core.map(absolute)),optionalURLs=new Set([...RASM_OFFLINE.optional,...(RASM_OFFLINE.stories||[])].map(absolute));
 async function ensureOptional(){const cache=await caches.open(OPTIONAL);for(const path of RASM_OFFLINE.optional){const url=absolute(path);if(!await cache.match(url))await cache.add(new Request(url,{cache:'reload'}))}}
 self.addEventListener('install',event=>{
  event.waitUntil(caches.open(CORE).then(cache=>cache.addAll(RASM_OFFLINE.core.map(path=>new Request(absolute(path),{cache:'reload'})))));

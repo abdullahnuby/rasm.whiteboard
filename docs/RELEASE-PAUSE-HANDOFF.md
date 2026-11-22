@@ -2,6 +2,8 @@
 
 Date: 22 November 2026
 
+> Historical handoff for the earlier release. The resumed code-only composer is described in [CODE-ONLY-STORY-COMPOSER.md](CODE-ONLY-STORY-COMPOSER.md); its scope supersedes the no-generator statement below.
+
 ## Released application
 
 The live browser app is https://rasmwhiteboard.vercel.app/ . The release carries the tested app behavior from commit `f5da0f36e85b388f94a18cfff0587f67510d2131`, including the full-color single-pass reveal and the later export-delivery repair: share from a fresh user click, file capability checks, a visible viewer fallback, retained previous downloads and on-screen export diagnostics. The current example/documentation commit does not change application runtime code, optional models, offline resources or automatic cache size.
