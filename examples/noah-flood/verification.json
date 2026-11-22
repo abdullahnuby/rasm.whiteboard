@@ -1,0 +1,61 @@
+{
+  "sceneCount": 5,
+  "durationSeconds": 35,
+  "timelineElementCount": 51,
+  "groupCounts": [
+    9,
+    10,
+    13,
+    9,
+    10
+  ],
+  "zeroUnassignedForegroundPixels": true,
+  "completeRevealOriginalForegroundPixels": true,
+  "nativeProjectRoundtrip": true,
+  "actualAppMP4Export": {
+    "codec": "h264",
+    "width": 1280,
+    "height": 720,
+    "fps": 24,
+    "durationSeconds": 35,
+    "bytes": 10478926,
+    "audio": false
+  },
+  "svgChecks": [
+    {
+      "file": "01-building.svg",
+      "bytes": 27336,
+      "groupCount": 9
+    },
+    {
+      "file": "noah-storyboard.svg",
+      "bytes": 424370,
+      "groupCount": 11
+    },
+    {
+      "file": "05-judi.svg",
+      "bytes": 100377,
+      "groupCount": 10
+    },
+    {
+      "file": "04-flood.svg",
+      "bytes": 99274,
+      "groupCount": 9
+    },
+    {
+      "file": "03-boarding.svg",
+      "bytes": 68002,
+      "groupCount": 13
+    },
+    {
+      "file": "02-onset.svg",
+      "bytes": 64967,
+      "groupCount": 10
+    }
+  ],
+  "limits": [
+    "Desktop Chromium, not a real iPhone",
+    "Whiteboard reveal, not object-motion animation",
+    "Finite authored stages, not arbitrary prompt-to-image generation"
+  ]
+}

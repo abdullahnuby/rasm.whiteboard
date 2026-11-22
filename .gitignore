@@ -16,3 +16,6 @@ dist/models/
 
 dist/service-worker.js
 dist/offline-cache.json
+
+examples/noah-flood/authored-scenes.json
+examples/seedling/build-info.json

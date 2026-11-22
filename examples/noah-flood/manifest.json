@@ -1,0 +1,256 @@
+[
+  {
+    "id": "01-building",
+    "stage": 1,
+    "title": "بناء السفينة",
+    "source": "https://quran.com/hud/37",
+    "duration": 7,
+    "bytes": 27336,
+    "groups": [
+      {
+        "id": "caption",
+        "label": "عنوان المرحلة"
+      },
+      {
+        "id": "caption-rule",
+        "label": "زخرفة العنوان"
+      },
+      {
+        "id": "explanation",
+        "label": "شرح المرحلة"
+      },
+      {
+        "id": "ground",
+        "label": "أرض البناء"
+      },
+      {
+        "id": "supports",
+        "label": "حوامل خشبية"
+      },
+      {
+        "id": "ark-frame",
+        "label": "السفينة قيد البناء"
+      },
+      {
+        "id": "timber",
+        "label": "ألواح وخشب"
+      },
+      {
+        "id": "tools",
+        "label": "أدوات البناء"
+      },
+      {
+        "id": "wood-details",
+        "label": "علامات وخطوط على الخشب"
+      }
+    ]
+  },
+  {
+    "id": "02-onset",
+    "stage": 2,
+    "title": "بداية الطوفان",
+    "source": "https://quran.com/54/11-12",
+    "duration": 7,
+    "bytes": 64967,
+    "groups": [
+      {
+        "id": "caption",
+        "label": "عنوان المرحلة"
+      },
+      {
+        "id": "caption-rule",
+        "label": "زخرفة العنوان"
+      },
+      {
+        "id": "explanation",
+        "label": "شرح المرحلة"
+      },
+      {
+        "id": "clouds",
+        "label": "سحب المطر"
+      },
+      {
+        "id": "ground",
+        "label": "أرض مبتلة"
+      },
+      {
+        "id": "pool",
+        "label": "تجمع الماء حول السفينة"
+      },
+      {
+        "id": "ark",
+        "label": "السفينة"
+      },
+      {
+        "id": "rain",
+        "label": "مطر متزايد"
+      },
+      {
+        "id": "springs",
+        "label": "عيون من الأرض"
+      },
+      {
+        "id": "rising-water",
+        "label": "ماء يبدأ في التجمع"
+      }
+    ]
+  },
+  {
+    "id": "03-boarding",
+    "stage": 3,
+    "title": "الصعود إلى السفينة",
+    "source": "https://quran.com/hud/40-44",
+    "duration": 7,
+    "bytes": 68002,
+    "groups": [
+      {
+        "id": "caption",
+        "label": "عنوان المرحلة"
+      },
+      {
+        "id": "caption-rule",
+        "label": "زخرفة العنوان"
+      },
+      {
+        "id": "explanation",
+        "label": "شرح المرحلة"
+      },
+      {
+        "id": "clouds",
+        "label": "سحب ومطر أول الطوفان"
+      },
+      {
+        "id": "rain",
+        "label": "مطر في الخلفية"
+      },
+      {
+        "id": "ground",
+        "label": "أرض الصعود"
+      },
+      {
+        "id": "pool",
+        "label": "ماء حول السفينة"
+      },
+      {
+        "id": "ark",
+        "label": "السفينة"
+      },
+      {
+        "id": "ramp",
+        "label": "لوح الصعود"
+      },
+      {
+        "id": "goat-pair",
+        "label": "زوج من الماعز، مثال توضيحي"
+      },
+      {
+        "id": "sheep-pair",
+        "label": "زوج من الغنم، مثال توضيحي"
+      },
+      {
+        "id": "bird-pair",
+        "label": "زوج من الطيور، مثال توضيحي"
+      },
+      {
+        "id": "water-edge",
+        "label": "ماء في أطراف الأرض"
+      }
+    ]
+  },
+  {
+    "id": "04-flood",
+    "stage": 4,
+    "title": "اشتداد الطوفان",
+    "source": "https://quran.com/hud/40-44",
+    "duration": 7,
+    "bytes": 99274,
+    "groups": [
+      {
+        "id": "caption",
+        "label": "عنوان المرحلة"
+      },
+      {
+        "id": "caption-rule",
+        "label": "زخرفة العنوان"
+      },
+      {
+        "id": "explanation",
+        "label": "شرح المرحلة"
+      },
+      {
+        "id": "storm-clouds",
+        "label": "سحب كثيفة"
+      },
+      {
+        "id": "distant-peaks",
+        "label": "قمم بعيدة خلف الأمواج"
+      },
+      {
+        "id": "back-water",
+        "label": "أمواج خلف السفينة"
+      },
+      {
+        "id": "ark",
+        "label": "السفينة"
+      },
+      {
+        "id": "heavy-rain",
+        "label": "مطر غزير"
+      },
+      {
+        "id": "front-waves",
+        "label": "أمواج عالية أمام السفينة"
+      }
+    ]
+  },
+  {
+    "id": "05-judi",
+    "stage": 5,
+    "title": "انحسار الماء والاستقرار على الجودي",
+    "source": "https://quran.com/hud/40-44",
+    "duration": 7,
+    "bytes": 100377,
+    "groups": [
+      {
+        "id": "caption",
+        "label": "عنوان المرحلة"
+      },
+      {
+        "id": "caption-rule",
+        "label": "زخرفة العنوان"
+      },
+      {
+        "id": "explanation",
+        "label": "شرح المرحلة"
+      },
+      {
+        "id": "clear-sky",
+        "label": "انفراج السحب"
+      },
+      {
+        "id": "sunlight",
+        "label": "انقشاع المطر"
+      },
+      {
+        "id": "judi-mountain",
+        "label": "الجودي، تمثيل رمزي"
+      },
+      {
+        "id": "ark",
+        "label": "السفينة"
+      },
+      {
+        "id": "judi-label",
+        "label": "اسم الجبل"
+      },
+      {
+        "id": "receding-water",
+        "label": "ماء منحسر حول الجبل"
+      },
+      {
+        "id": "shore",
+        "label": "صخور الشاطئ"
+      }
+    ]
+  }
+]
