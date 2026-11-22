@@ -8,7 +8,7 @@ function failForeground(error){foregroundJob?.fail(error)}
 const surface=(w,h)=>Object.assign(document.createElement('canvas'),{width:w,height:h});
 let scenes=[], selected=0, time=0, running=false, recording=false, start=0, frame=0, tone=0, demo=true, loading=false, lastUrl='', activeImport=null;
 let timelineScale=40, audioTimeline=null, timelineDrag=null, exportSession=null, lastExportRevision=null, lastExportAttempt=null;
-const defaults={revealMode:'outline-color',speed:.5,motionStyle:'smart',mode:'original',tone:4,sourceHand:'auto',handSize:100,weight:1.4,side:'1',hold:18,paper:'#ffffff',transition:'cut'};
+const defaults={revealMode:'direct',speed:.5,motionStyle:'smart',mode:'original',tone:4,sourceHand:'auto',handSize:100,weight:1.4,side:'1',hold:18,paper:'#ffffff',transition:'cut'};
 const colors=['#e6af89','#986642',null], total=()=>RasmTimeline.totalSeconds(scenes), offset=i=>RasmTimeline.layout(scenes,1)[i]?.start||0;
 function setOperationStatus(label,done=0,total=1){
  const panel=el('operationStatus');if(!panel)return;
@@ -66,6 +66,7 @@ function frameTarget(scene,handResources){
   frameAsset={source:scene.src,sourcePixels:scene.src.getContext('2d').getImageData(0,0,scene.src.width,scene.src.height).data,
    scratch:{image:scratch,context,pixels:context.createImageData(scene.src.width,scene.src.height)}}
  }
+ if(scene.revealMode!=='outline-color'&&frameAsset.outlineMask)frameAsset.outlineMask=null;
  if(scene.revealMode==='outline-color'&&!frameAsset.outlineMask)frameAsset.outlineMask=RasmEditorCore.createOutlineMask(frameAsset.sourcePixels,scene.src.width,scene.src.height);
  const photo=photoHand.naturalWidth?{image:photoHand,width:photoHand.naturalWidth,height:photoHand.naturalHeight}:undefined;
  const custom=typeof handImage!=='undefined'&&handImage?{image:handImage,width:handImage.naturalWidth,height:handImage.naturalHeight}:undefined;
@@ -436,7 +437,7 @@ el('export').onclick=async()=>{
 scenes=[];selected=0;time=0;size();refresh();
 
 el('allOutline').onclick=()=>{if(!scenes.length)return;stop();for(const scene of scenes){scene.mode='original';scene.revealMode='outline-color'}cache={};pick(selected);queueSave();el('msg').textContent='تم تطبيق الحدود ثم ألوان المصدر على كل المشاهد. مدة المشاهد وترتيب العناصر لم يتغيرا.'};
-el('allOriginal').onclick=()=>{if(!scenes.length)return;stop();for(const s of scenes)s.mode='original';cache={};pick(selected);queueSave();el('msg').textContent='تم تطبيق ألوان الصور الأصلية على كل المشاهد.'};
+el('allOriginal').onclick=()=>{if(!scenes.length)return;stop();for(const s of scenes){s.mode='original';s.revealMode='direct'}cache={};frameAsset=null;pick(selected);queueSave();el('msg').textContent='تم تطبيق ألوان المصدر بمرور واحد على كل المشاهد، دون مرحلة حدود منفصلة. المدد وترتيب العناصر لم يتغيرا.'};
 
 function updateSpeed(all){
  if(!scenes.length)return;

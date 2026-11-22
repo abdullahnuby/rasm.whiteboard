@@ -24,3 +24,12 @@ test('project snapshot timing is exact at scene boundaries and end',()=>{
 });
 
 test('outline/color is source-derived, deterministic, and ends in exact original pixels',()=>{const plan=createScenePlan({...metadata,revealMode:'outline-color'},drawing,pixels),a=target(),b=target();for(const p of [5,6,9,10])a.sourcePixels.set([60,130,180,255],p*4);a.outlineMask=createOutlineMask(a.sourcePixels,4,4);b.sourcePixels=a.sourcePixels.slice();b.outlineMask=a.outlineMask;assert.ok(a.outlineMask.some(Boolean));renderFrame(plan,.3,a);renderFrame(plan,.9,b);renderFrame(plan,.3,b);assert.deepEqual(a.captured.at(-1),b.captured.at(-1));assert.equal(revealPhaseAt(plan,.3).color,0);const transfer=revealPhaseAt(plan,.61).transfer;assert.ok(transfer&&transfer.ratio>=0&&transfer.ratio<=1);renderFrame(plan,1,a);assert.deepEqual(a.captured.at(-1),Array.from(a.sourcePixels));assert.throws(()=>renderFrame(plan,.2,target()),/Outline/)});
+
+test('single-pass source color reveals exact RGB once with monotonic progress and no color-return phase',()=>{
+ const plan=createScenePlan({...metadata,revealMode:'direct'},drawing,pixels),a=target();for(let p=0;p<16;p++)a.sourcePixels.set([30+p,100+p,180-p,255],p*4);
+ let previous=0,lastCount=0;for(let frame=0;frame<=100;frame++){
+  const t=frame/100,phase=revealPhaseAt(plan,t);assert.ok(phase.progress>=previous);assert.equal(phase.color,phase.progress);assert.equal(phase.transfer,undefined);previous=phase.progress;renderFrame(plan,t,a);const bytes=a.captured.at(-1);let count=0;
+  for(let p=0;p<16;p++)if(bytes[p*4+3]){count++;assert.deepEqual(bytes.slice(p*4,p*4+4),Array.from(a.sourcePixels.slice(p*4,p*4+4)))}assert.ok(count>=lastCount);lastCount=count;
+ }
+ assert.equal(lastCount,16);assert.equal(a.outlineMask,undefined);
+});

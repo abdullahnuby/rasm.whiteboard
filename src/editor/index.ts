@@ -8,3 +8,5 @@ export * from './frame-renderer.js';
 export * from './elements.js';
 
 export * from './reveal-style.js';
+
+export * from './proposals.js';

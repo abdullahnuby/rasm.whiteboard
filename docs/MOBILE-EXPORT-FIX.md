@@ -1,5 +1,7 @@
 # Mobile export repair
 
+Update: the outline/color default described below was superseded by the user's later single-pass source-color direction. See SMART-ELEMENTS-AND-SINGLE-PASS.md. Saved projects retain their recorded style.
+
 This repair addresses reproduced export-path failures and a mismatch between the default reveal and the outline/color comparison clips. It is not proof that every iPhone, Safari version or project exports successfully.
 
 ## Changes

@@ -75,3 +75,4 @@ header .menuButton:hover:enabled{background:#38304d;color:white}
 #installApp,#protectStorage{min-height:44px}
 .exportError{width:100%;margin:4px 0;padding:12px;border:1px solid #e4b6b6;border-radius:8px;background:#fff2f2;color:#842f3a;font-size:14px;line-height:1.8;overflow-wrap:anywhere}
 a.downloadButton{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;border:1px solid transparent;border-radius:8px;font-weight:700;font-size:14px;padding:8px 12px;touch-action:manipulation;min-height:44px;cursor:pointer}a.downloadButton:hover{background:#5033ab}
+@media(max-width:760px){.elementToolbar button,.elementFooter button,.elementItem button,.elementProposal button{min-height:44px}.elementToolbar label{flex-wrap:wrap}.elementToolbar select{font-size:16px;min-height:44px;max-width:100%}}
