@@ -20,3 +20,9 @@ assert.equal(layout[2].start, 10);
 assert.equal(layout[2].duration, 8);
 assert.equal(vm.runInContext('RasmTimeline.totalSeconds([{duration:3,speed:.5},{duration:4,speed:1},{duration:2,speed:.25}])', context), 18);
 console.log('RASM timeline tests passed.');
+
+for(const scale of [.5,1,4.5,10,40,80]) {
+ const step=vm.runInContext(`RasmTimeline.tickStep(${scale},150)`,context);
+ assert.ok(step*scale>=70,'Ruler ticks must leave space for labels');
+ assert.ok(150/step<=100,'Ruler tick count must stay bounded');
+}

@@ -1,5 +1,10 @@
 'use strict';
 const el=id=>document.getElementById(id), board=el('board'), ctx=board.getContext('2d'), range=el('seek'), files=el('files');
+const editorSession=new RasmEditorCore.EditorSession();
+let foregroundJob=null;
+function beginForeground(kind,label){foregroundJob?.cancel();return foregroundJob=editorSession.operations.begin(kind,label)}
+function endForeground(){foregroundJob?.finish();foregroundJob=null}
+function failForeground(error){foregroundJob?.fail(error)}
 const surface=(w,h)=>Object.assign(document.createElement('canvas'),{width:w,height:h});
 let scenes=[], selected=0, time=0, running=false, recording=false, start=0, frame=0, tone=0, demo=true, loading=false, lastUrl='', activeImport=null;
 let timelineScale=40, audioTimeline=null, timelineDrag=null, exportSession=null, lastExportRevision=null;
@@ -9,7 +14,7 @@ function setOperationStatus(label,done=0,total=1){
  const panel=el('operationStatus');if(!panel)return;
  panel.hidden=false;el('operationText').textContent=label;
  const max=Math.max(1,total),value=Math.max(0,Math.min(max,done));
- el('operationProgress').value=value/max*100;el('operationPercent').textContent=Math.round(value/max*100)+'%';
+ foregroundJob?.progress(value/max,label);el('operationProgress').value=value/max*100;el('operationPercent').textContent=Math.round(value/max*100)+'%';
 }
 function clearOperationStatus(){const panel=el('operationStatus');if(panel)panel.hidden=true}
 function prewarmColorSchedules(items){
@@ -32,17 +37,6 @@ function prewarmColorSchedules(items){
  setTimeout(warmNext,0);
 }
 function path(c,points,ink,width=1.4){c.beginPath();c.moveTo(...points[0]);for(let i=1;i<points.length;i++)c.lineTo(...points[i]);c.strokeStyle=ink;c.lineWidth=width;c.lineJoin=c.lineCap='round';c.stroke()}
-function pointAt(points,position){
- const p=Math.max(0,Math.min(points.length-1,position)),i=Math.floor(p),f=p-i,a=points[i],b=points[Math.min(points.length-1,i+1)];
- return f? a.map((v,k)=>v+(b[k]-v)*f):a;
-}
-function pathRange(c,points,from,to,ink,width=1.4){
- if(!points.length||to<=from)return;
- c.beginPath();c.moveTo(...pointAt(points,from));
- for(let i=Math.floor(from)+1;i<to;i++)c.lineTo(...points[i]);
- c.lineTo(...pointAt(points,to));
- c.strokeStyle=ink;c.lineWidth=width;c.lineJoin=c.lineCap='round';c.stroke();
-}
 function house(phase){
  const img=surface(640,360),c=img.getContext('2d');c.fillStyle='#fff';c.fillRect(0,0,640,360);
  const p=(x,y,z)=>[313+x*.94-y*.76,230+x*.28+y*.38-z];
@@ -60,64 +54,55 @@ function house(phase){
  if(phase===2){for(let i=0;i<4;i++){const x=115+i*12,y=-44+i*15;line([x,y,0],[x,y,45]);for(let j=0;j<6;j++)line([x,y,16+j*5],[x-7+j*.5,y+6,28+j*4],'#798668',2)}}
  return img}
 const photoHand=new Image();photoHand.src='assets/marker-hand.webp';photoHand.onload=()=>render(time);
-function drawHand(c,x,y,scale,tone,side){
- if(tone===4){if(!photoHand.naturalWidth)return;const w=scale*190,h=w*photoHand.height/photoHand.width;c.save();c.translate(x,y);c.scale(Number(side),1);c.drawImage(photoHand,-w*.052,-h*.15,w,h);c.restore();return}
- if(tone===2)return;
- if(tone===3 && handImage){const w=scale*112,h=w*handImage.height/handImage.width;c.save();c.translate(x,y);c.scale(Number(side),1);c.drawImage(handImage,-w*handTip.x/100,-h*handTip.y/100,w,h);c.restore();return}
- c.save();c.translate(x,y);c.scale(scale*Number(side),scale);c.rotate(-.12);
- c.fillStyle='#273c31';c.beginPath();c.moveTo(0,0);c.lineTo(4,-10);c.lineTo(42,-46);c.quadraticCurveTo(46,-48,49,-42);c.lineTo(9,-5);c.closePath();c.fill();
- c.fillStyle=colors[tone];c.strokeStyle='#765544';c.lineWidth=1.4;c.beginPath();c.moveTo(22,-18);c.bezierCurveTo(15,-20,10,-15,13,-11);c.quadraticCurveTo(19,-7,31,-13);c.quadraticCurveTo(25,-5,31,0);c.quadraticCurveTo(40,9,54,13);c.lineTo(79,34);c.lineTo(99,11);c.lineTo(74,-7);c.quadraticCurveTo(64,-23,52,-31);c.quadraticCurveTo(43,-37,36,-32);c.lineTo(20,-23);c.quadraticCurveTo(15,-16,22,-18);c.fill();c.stroke();path(c,[[22,-18],[35,-22],[42,-18]],'#906c53');path(c,[[32,-13],[41,-16],[48,-12]],'#906c53');c.restore()}
 let cache={};
+globalThis.addEventListener('rasm-schedule-ready',event=>{
+ if(!running&&!recording&&scenes.some(scene=>scene.lines===event.detail?.lines)){cache={};render(time)}
+});
+const scenePlanCompiler=new RasmEditorCore.ScenePlanCompiler();
+let frameAsset=null;
+function frameTarget(scene,handResources){
+ if(frameAsset?.source!==scene.src){
+  const scratch=surface(scene.src.width,scene.src.height),context=scratch.getContext('2d');
+  frameAsset={source:scene.src,sourcePixels:scene.src.getContext('2d').getImageData(0,0,scene.src.width,scene.src.height).data,
+   scratch:{image:scratch,context,pixels:context.createImageData(scene.src.width,scene.src.height)}}
+ }
+ if(scene.revealMode==='outline-color'&&!frameAsset.outlineMask)frameAsset.outlineMask=RasmEditorCore.createOutlineMask(frameAsset.sourcePixels,scene.src.width,scene.src.height);
+ const photo=photoHand.naturalWidth?{image:photoHand,width:photoHand.naturalWidth,height:photoHand.naturalHeight}:undefined;
+ const custom=typeof handImage!=='undefined'&&handImage?{image:handImage,width:handImage.naturalWidth,height:handImage.naturalHeight}:undefined;
+ return {context:ctx,width:board.width,height:board.height,source:{image:scene.src,width:scene.src.width,height:scene.src.height},
+  sourcePixels:frameAsset.sourcePixels,outlineMask:frameAsset.outlineMask,scratch:frameAsset.scratch,hands:handResources||{photo,custom}}
+}
+function compileScenePlan(scene,pixels=scene.mode==='original'?colorSchedule(scene):null){
+ const id=editorSession.sceneId(scene),metadata=editorSession.project.snapshot.scenes.find(row=>row.id===id);
+ if(!metadata||!scene.enginePlanV2)throw Error('المشهد غير جاهز للرسم.');
+ const tip=typeof handTip!=='undefined'?[handTip.x,handTip.y]:[5,88];
+ return scenePlanCompiler.compile(metadata,scene.enginePlanV2,pixels,scene.handHint,tip)
+}
+function captureProjectRenderer(){
+ const plans=scenes.map(scene=>compileScenePlan(scene));
+ const project=RasmEditorCore.createProjectPlan(plans),sources=new Map(plans.map((plan,index)=>[plan.assetId,scenes[index].src]));
+ const hands={photo:photoHand.naturalWidth?{image:photoHand,width:photoHand.naturalWidth,height:photoHand.naturalHeight}:undefined,
+  custom:handImage?{image:handImage,width:handImage.naturalWidth,height:handImage.naturalHeight}:undefined};
+ // Snapshot plans and resource identities once. Encoding never reads live editor settings.
+ return seconds=>RasmEditorCore.renderProjectFrame(project,seconds,plan=>frameTarget({src:sources.get(plan.assetId),revealMode:plan.revealMode},hands))
+}
 function render(t){
  const W=board.width,H=board.height;ctx.fillStyle='white';ctx.fillRect(0,0,W,H);
- if(!scenes.length)return;let i=0,local=t;while(i<scenes.length-1 && local>=sceneSeconds(scenes[i]))local-=sceneSeconds(scenes[i++]);
- const s=scenes[i],mode=s.mode,duration=sceneSeconds(s),drawTime=duration*(1-s.hold/100),frac=Math.min(1,local/drawTime),motion=strokeProgress(s,frac),target=motion.target;
- ctx.fillStyle=s.paper;ctx.fillRect(0,0,W,H);
- if(cache.s!==s || cache.mode!==mode || cache.weight!==s.weight || target<cache.t){let lay=surface(s.src.width,s.src.height);cache={s,mode,weight:s.weight,lay,c:lay.getContext('2d'),idx:0,t:0}}
- let tip;
- const original=mode==='original';
- if(!original){
-  let cursor=cache.paintedThrough||0;
-  while(cache.idx<s.lines.length){
-   const line=s.lines[cache.idx],end=line.start+line.points.length;
-   if(target<=line.start)break;
-   const from=Math.max(0,cursor-line.start),to=Math.min(line.points.length,target-line.start);
-   if(to>from)pathRange(cache.c,line.points,from,to,mode==='color'?line.color:'#29362e',s.weight);
-   cache.paintedThrough=line.start+to;cursor=cache.paintedThrough;
-   if(to>=line.points.length){cache.idx++;cursor=end;cache.paintedThrough=cursor}
-   else break;
-  }
+ if(!scenes.length){frameAsset=null;return}
+ let i=0,local=t;while(i<scenes.length-1&&local>=sceneSeconds(scenes[i]))local-=sceneSeconds(scenes[i++]);
+ const scene=scenes[i];let pixels=null;
+ if(scene.mode==='original'){
+  try{pixels=colorSchedule(scene)}
+  catch(error){scene.engineScheduleError=String(error?.message||error);refreshEngineDiagnostics(scene);el('msg').textContent='خطأ في خطة رسم المشهد: '+scene.engineScheduleError}
  }
- if(original&&!cache.pixels&&!s.engineScheduleError){
-  try{
-   const plan=colorSchedule(s);
-   if(plan){
-    const data=s.src.getContext('2d').getImageData(0,0,s.src.width,s.src.height);
-    const image=cache.c.createImageData(s.src.width,s.src.height);
-    cache.pixels={...plan,source:new Uint32Array(data.data.buffer),output:new Uint32Array(image.data.buffer),image,count:0};
-   }
-  }catch(error){
-   s.engineScheduleError=String(error.message||error);
-   refreshEngineDiagnostics(s);
-   el('msg').textContent='خطأ في خطة رسم المشهد: '+s.engineScheduleError;
-  }
- }
- if(original&&cache.pixels){
-  // Both the marker and every owned raster pixel share the same physical scene clock.
-  if(revealPixels(cache.pixels,frac))cache.c.putImageData(cache.pixels.image,0,0)
- }
- cache.t=target;const sc=Math.min(W/s.src.width,H/s.src.height)*.96,ox=(W-sc*s.src.width)/2,oy=(H-sc*s.src.height)/2;
- ctx.save();ctx.translate(ox,oy);ctx.scale(sc,sc);ctx.drawImage(cache.lay,0,0);
- // No top-down or row-major fallback: the element-owned schedule is mandatory.
- tip=frac<1||mode!=='original'?motion.tip||null:null;
- if(original&&!cache.pixels)tip=null;
-
- if(mode==='fill' && frac===1){ctx.globalAlpha=Math.min(1,s.hold===0?1:(local-drawTime)/Math.min(.6,duration*s.hold/100));ctx.drawImage(s.src,0,0);ctx.globalAlpha=1}
- ctx.restore();if(tip&&overlayEnabled(s))drawHand(ctx,ox+tip[0]*sc,oy+tip[1]*sc,Math.min(W,H)/425*s.handSize/100,s.tone,s.side);
- if(s.transition==='fade'){ctx.globalAlpha=Math.max(0,1-(duration-local)/Math.min(.45,duration*.22));ctx.fillStyle=s.paper;ctx.fillRect(0,0,W,H);ctx.globalAlpha=1}
- range.value=t;range.max=total();el('clock').textContent=formatClock(t)+' / '+formatClock(total());el('meta').textContent='المشهد '+(i+1)+' من '+scenes.length;if(typeof updateTimelinePlayhead==='function')updateTimelinePlayhead(t);
-
+ const id=editorSession.sceneId(scene),metadata=editorSession.project.snapshot.scenes.find(row=>row.id===id);
+ if(metadata&&scene.enginePlanV2&&(scene.mode!=='original'||pixels)){
+  RasmEditorCore.renderFrame(compileScenePlan(scene,pixels),local,frameTarget(scene));
+ }else{ctx.fillStyle=scene.paper;ctx.fillRect(0,0,W,H)}
+ range.value=t;range.max=total();el('clock').textContent=formatClock(t)+' / '+formatClock(total());el('meta').textContent='المشهد '+(i+1)+' من '+scenes.length;
+ if(typeof updateTimelinePlayhead==='function')updateTimelinePlayhead(t)
 }
+
 function stop(){if(typeof stopSound==='function')stopSound();running=false;cancelAnimationFrame(frame);el('play').textContent='▶︎'}
 function run(end){
  stop();if(typeof startSound==='function')startSound(time);running=true;start=performance.now()-time*1000;el('play').textContent='Ⅱ';
@@ -159,6 +144,7 @@ function syncTimelineGeometry(){
  const width=Math.max(scroll.clientWidth||640,end*timelineScale+70,640);
  content.style.width=width+'px';el('timelineRuler').style.width=width+'px';el('timelineVideoTrack').style.width=width+'px';el('timelineAudioTrack').style.width=width+'px';
  layout.forEach(item=>{const clip=el('timelineVideoTrack').querySelector('[data-index="'+item.index+'"]');if(!clip)return;clip.style.left=(item.start*timelineScale)+'px';clip.style.width=(item.duration*timelineScale)+'px';const duration=clip.querySelector('.timelineClipDuration');if(duration)duration.textContent=item.duration.toFixed(1)+' ث'});
+ if(typeof renderElementTimeline==='function')renderElementTimeline();
  time=Math.min(time,total());range.max=total();updateTimelinePlayhead(time);
 }
 function renderTimeline(){
@@ -168,7 +154,7 @@ function renderTimeline(){
  const width=Math.max(scroll.clientWidth||640,end*timelineScale+70,640);
  content.style.width=width+'px';ruler.style.width=width+'px';video.style.width=width+'px';audio.style.width=width+'px';
  ruler.replaceChildren();video.replaceChildren();audio.replaceChildren();
- const tickStep=Math.max(5,Math.ceil((end/100)/5)*5);
+ const tickStep=RasmTimeline.tickStep(timelineScale,end);
  for(let t=0;t<=Math.ceil(end/tickStep)*tickStep;t+=tickStep){const tick=document.createElement('span');tick.className='timelineTick';tick.style.left=(t*timelineScale)+'px';tick.textContent=RasmTimeline.formatTime(t);ruler.append(tick)}
  for(const item of layout){
   const scene=scenes[item.index],clip=document.createElement('div');clip.className='timelineClip'+(item.index===selected?' active':'');clip.dataset.index=item.index;
@@ -187,6 +173,7 @@ function renderTimeline(){
   const duration=document.createElement('small');duration.textContent=RasmTimeline.formatTime(audioTimeline.duration);
   audioClip.append(label,buildWaveform(audioTimeline.buffer),duration);audio.append(audioClip);
  }else audio.hidden=true;
+ if(typeof renderElementTimeline==='function')renderElementTimeline();
  updateTimelinePlayhead(time);
 }
 function beginTimelineResize(index,event){
@@ -237,7 +224,7 @@ function refreshEngineDiagnostics(scene){
  if(warnings.length)rows.push('تحذيرات:\n'+warnings.join('\n'));
  el('engineDiagnosticsText').textContent=rows.join('\n');
 }
-function refresh(){if(typeof refreshGuide==='function')refreshGuide();const current=scenes[selected]||defaults;el('speed').value=current.speed||1;el('motionStyle').value=current.motionStyle||'smart';el('elementDirection').value=current.elementDirection||'rtl';el('sceneTime').textContent=scenes.length?'مدة المشهد بعد ضبط السرعة: '+sceneSeconds(current).toFixed(1)+' ث':'';el('sourceHand').value=current.sourceHand;el('handSize').value=current.handSize;el('sizeValue').value=current.handSize+'%';el('weight').value=current.weight;el('zoneEdit').disabled=!scenes.length;el('handState').textContent=current.sourceHand==='present'?'تُستخدم اليد الظاهرة في الصورة.':current.handHint&&current.sourceHand==='auto'?'إذا ظهرت يد في الصورة، اختر «الصورة تتضمّن يدًا».':current.handHint&&current.sourceHand==='detect'?'أُخفيت اليد بناءً على الفحص.':'';el('style').value=current.mode;el('side').value=current.side;el('paper').value=current.paper;el('hold').value=current.hold;el('holdValue').value=current.hold+'%';el('transition').value=current.transition;el('sceneName').value=current.name||'';document.querySelectorAll('#hands button').forEach((b,i)=>b.classList.toggle('active',Number(b.dataset.tone)===current.tone));range.max=total();el('duration').value=scenes.length?sceneSeconds(scenes[selected]).toFixed(1):'6';el('count').textContent=scenes.length+' مشاهد';el('cards').replaceChildren();scenes.forEach((s,i)=>{const b=document.createElement('button');b.className='card'+(i===selected?' active':'');const img=new Image();img.src=s.thumb;const caption=document.createElement('span');caption.textContent=(i+1)+' · '+s.name;b.append(img,caption);b.onclick=()=>pick(i);el('cards').append(b)});
+function refresh(){editorSession.synchronize(scenes,selected,el('titleView').textContent);if(typeof refreshGuide==='function')refreshGuide();const current=scenes[selected]||defaults;el('speed').value=current.speed||1;el('motionStyle').value=current.motionStyle||'smart';el('elementDirection').value=current.elementDirection||'rtl';el('sceneTime').textContent=scenes.length?'مدة المشهد بعد ضبط السرعة: '+sceneSeconds(current).toFixed(1)+' ث':'';el('sourceHand').value=current.sourceHand;el('handSize').value=current.handSize;el('sizeValue').value=current.handSize+'%';el('weight').value=current.weight;el('zoneEdit').disabled=!scenes.length;el('elementEdit').disabled=!scenes.length;el('handState').textContent=current.sourceHand==='present'?'تُستخدم اليد الظاهرة في الصورة.':current.handHint&&current.sourceHand==='auto'?'إذا ظهرت يد في الصورة، اختر «الصورة تتضمّن يدًا».':current.handHint&&current.sourceHand==='detect'?'أُخفيت اليد بناءً على الفحص.':'';el('style').value=current.mode;el('revealMode').value=current.revealMode||'direct';el('revealMode').disabled=current.mode!=='original';el('side').value=current.side;el('paper').value=current.paper;el('hold').value=current.hold;el('holdValue').value=current.hold+'%';el('transition').value=current.transition;el('sceneName').value=current.name||'';document.querySelectorAll('#hands button').forEach((b,i)=>b.classList.toggle('active',Number(b.dataset.tone)===current.tone));range.max=total();el('duration').value=scenes.length?sceneSeconds(scenes[selected]).toFixed(1):'6';el('count').textContent=scenes.length+' مشاهد';el('cards').replaceChildren();scenes.forEach((s,i)=>{const b=document.createElement('button');b.className='card'+(i===selected?' active':'');const img=new Image();img.src=s.thumb;const caption=document.createElement('span');caption.textContent=(i+1)+' · '+s.name;b.append(img,caption);b.onclick=()=>pick(i);el('cards').append(b)});
  el('earlier').disabled=selected<=0;el('later').disabled=selected>=scenes.length-1;for(const id of ['export','play','remove','duration','seek'])el(id).disabled=!scenes.length;
  if(!scenes.length){el('clock').textContent='0:00 / 0:00';el('meta').textContent='';range.value=0}renderTimeline();render(time);refreshEngineDiagnostics(scenes[selected]||null);if(typeof refreshGuide==='function')refreshGuide()}
 function setBoardResolution(longEdge){const r=+el('ratio').value;const width=r>=1?longEdge:Math.round(longEdge*r/2)*2;const height=r>=1?Math.round(longEdge/r/2)*2:longEdge;if(board.width!==width||board.height!==height){board.width=width;board.height=height}render(time)}
@@ -253,7 +240,7 @@ el('duration').oninput=e=>{
  if(typeof refreshGuide==='function')refreshGuide();queueSave()
 };
 el('duration').onchange=()=>{if(scenes[selected])pick(selected)};
-el('ratio').onchange=el('quality').onchange=size;const fields={sourceHand:'sourceHand',handSize:'handSize',weight:'weight',style:'mode',side:'side',paper:'paper',transition:'transition',sceneName:'name',hold:'hold'};
+el('ratio').onchange=el('quality').onchange=size;const fields={revealMode:'revealMode',sourceHand:'sourceHand',handSize:'handSize',weight:'weight',style:'mode',side:'side',paper:'paper',transition:'transition',sceneName:'name',hold:'hold'};
 for(const [id,key] of Object.entries(fields))el(id).onchange=()=>{if(!scenes[selected])return;scenes[selected][key]=['hold','weight','handSize'].includes(id)?Number(el(id).value):el(id).value;if(key==='mode')cache={};refresh()};
 async function replanSelectedScene(label){
  const scene=scenes[selected];if(!scene)return;
@@ -310,6 +297,7 @@ function updateBatchStatus(label,done,total){
 el('batchCancel').onclick=()=>{
  if(!activeImport)return;
  activeImport.cancelled=true;
+ foregroundJob?.cancel();
  RasmImageEngine.cancelPending?.('تم إلغاء تحليل الصورة بناءً على طلب المستخدم.');
  el('batchCancel').disabled=true;
  el('batchLabel').textContent='جارٍ إنهاء الصورة الحالية…';
@@ -325,7 +313,7 @@ async function importFiles(items){
  const candidates=imageItems.slice(0,availableSlots);
  const controller={cancelled:false};activeImport=controller;
  const added=[],failures=[];let done=0,projectPixels=currentProjectPixels();
- stop();busy(true);el('batchCancel').disabled=false;
+ stop();busy(true,'importing');foregroundJob?.signal.addEventListener('abort',()=>{controller.cancelled=true},{once:true});el('batchCancel').disabled=false;
  updateBatchStatus('بدء تجهيز الصور…',0,candidates.length);
  try{
   for(const file of candidates){
@@ -341,7 +329,7 @@ async function importFiles(items){
     }
     updateBatchStatus('تحليل '+file.name,done-1,candidates.length);
     const scene=await RasmImageEngine.analyzeAsync(img,file.name);
-    await applyZones(scene);added.push(scene);projectPixels+=dimensions.pixels;
+    scene.asset=file;await applyZones(scene);added.push(scene);projectPixels+=dimensions.pixels;
     updateBatchStatus('تم تجهيز '+added.length+' صورة · '+file.name,done,candidates.length);
    }catch(error){
     bad++;
@@ -367,7 +355,7 @@ async function importFiles(items){
 }
 files.onchange=async()=>{const items=[...files.files];files.value='';await importMedia(items)};document.ondragover=e=>e.preventDefault();document.ondrop=e=>{e.preventDefault();importMedia([...e.dataTransfer.files])};
 el('exportCancel').onclick=()=>{
- if(!exportSession)return;exportSession.cancelled=true;stop();exportSession.cancelOutput?.().catch(()=>{});
+ if(!exportSession)return;exportSession.cancelled=true;foregroundJob?.cancel();stop();exportSession.cancelOutput?.().catch(()=>{});
  if(exportSession.rec&&exportSession.rec.state!=='inactive')exportSession.rec.stop();
  el('exportLabel').textContent='جارٍ إيقاف التصدير بأمان…';el('exportCancel').disabled=true;
 };
@@ -376,7 +364,7 @@ el('export').onclick=async()=>{
  if(recording||loading||!scenes.length)return;
  stop();const session={cancelled:false,frameCount:0,revision:saveRevision};exportSession=session;
  const previousTime=time,duration=total(),msg=el('msg');
- const lock=flag=>{recording=flag;document.querySelector('.workflow').inert=flag;document.querySelector('main .grid').inert=flag;document.querySelector('.intro').inert=flag;el('export').disabled=flag;el('projectMenu').disabled=flag;if(typeof syncDrawer==='function')syncDrawer()};
+ const lock=flag=>{if(flag)beginForeground('exporting','تصدير الفيديو');else endForeground();recording=flag;document.querySelector('.workflow').inert=flag;document.querySelector('main .grid').inert=flag;document.querySelector('.intro').inert=flag;el('export').disabled=flag;el('projectMenu').disabled=flag;if(typeof syncDrawer==='function')syncDrawer()};
  lock(true);el('exportPanel').hidden=false;el('exportPanel').scrollIntoView({block:'start'});el('exportCancel').hidden=false;el('exportCancel').disabled=false;el('exportClose').hidden=true;
  el('exportPreview').pause();el('exportPreview').hidden=true;el('download').hidden=true;
  el('exportProgress').value=0;el('exportPercent').textContent='0%';el('exportLabel').textContent='تجهيز المشاهد للتصدير…';
@@ -393,12 +381,13 @@ el('export').onclick=async()=>{
   }
   time=0;cache={};exportSize();
   const progress=(fraction,done,count,finalizing)=>{
-   el('exportProgress').value=fraction*100;
+   foregroundJob?.progress(fraction,'إنشاء الفيديو');el('exportProgress').value=fraction*100;
    el('exportPercent').textContent=Math.floor(fraction*100)+'%';
    el('exportElapsed').textContent=done+' / '+count+' إطار';
    el('exportLabel').textContent=finalizing?'إنهاء ملف الفيديو…':'إنشاء الفيديو · '+duration.toFixed(1)+' ثانية'
   };
-  const options={canvas:board,duration,audio:soundBuffer,render:t=>{time=t;render(t)},session,onProgress:progress,format:el('exportFormat').value};
+  const renderExportFrame=captureProjectRenderer();
+  const options={canvas:board,duration,audio:soundBuffer,render:t=>{time=t;renderExportFrame(t)},session,onProgress:progress,format:el('exportFormat').value};
   let result;
   if(el('exportEngine').value==='live'||typeof VideoEncoder!=='function'||(soundBuffer&&typeof AudioEncoder!=='function'))result=await RasmLive.encode(options);
   else result=await RasmOffline.encode(options);

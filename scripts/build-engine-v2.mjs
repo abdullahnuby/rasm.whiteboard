@@ -11,6 +11,12 @@ const common = {
 };
 await Promise.all([
   build({
+    ...common, entryPoints:["src/editor/index.ts"], outfile:"dist/editor-core.js", format:"iife", globalName:"RasmEditorCore", platform:"browser"
+  }),
+  build({
+    ...common, entryPoints:["src/editor/index.ts"], outfile:".build/editor.js", format:"esm", platform:"node", target:["node20"]
+  }),
+  build({
     ...common,
     outfile: "dist/engine-v2.js",
     format: "iife",

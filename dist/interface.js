@@ -29,12 +29,21 @@ el('fitAudio').onclick=()=>{
  if(durations.some(d=>d<1||d>180)){el('msg').textContent='اضبط عدد المشاهد ليكون نصيب كل مشهد بين ثانية و180 ثانية.';return}
  stop();scenes.forEach((s,i)=>s.duration=durations[i]*(s.speed||1));time=0;refresh();queueSave()
 };
-el('sampleProject').onclick=()=>{
+el('sampleProject').onclick=async()=>{
  if(loading||recording)return;
- scenes=['الفكرة الأساسية','بناء التفاصيل','المشهد النهائي'].map((name,i)=>RasmImageEngine.analyze(house(i),name));
- for(const scene of scenes)applyZones(scene);
- demo=true;selected=0;time=0;prewarmColorSchedules(scenes);refresh();el('zoomFit').click();queueSave()
+ stop();busy(true);setOperationStatus('تجهيز المشروع التجريبي…',0,3);
+ try{
+  const examples=[],names=['الفكرة الأساسية','بناء التفاصيل','المشهد النهائي'];
+  for(let i=0;i<names.length;i++){
+   const scene=await RasmImageEngine.analyzeAsync(house(i),names[i]);
+   await applyZones(scene);examples.push(scene);setOperationStatus('تجهيز المشروع التجريبي…',i+1,names.length)
+  }
+  scenes=examples;demo=true;selected=0;time=0;cache={};clearRemoved();
+  prewarmColorSchedules(scenes);refresh();el('zoomFit').click();queueSave();el('msg').textContent='المشروع التجريبي جاهز للمعاينة.'
+ }catch(error){el('msg').textContent='تعذّر تجهيز المثال: '+String(error?.message||error)}
+ finally{clearOperationStatus();busy(false)}
 };
+
 document.addEventListener('keydown',e=>{
  if(e.code!=='Space'||e.target.matches('input,select,textarea,button')||document.querySelector('dialog[open]')||recording||loading||!scenes.length)return;
  e.preventDefault();el('play').click()
@@ -49,11 +58,7 @@ el('newProject').onclick=async()=>{
   if(scenes.length||soundAsset){
    if(!db)throw Error('الحفظ المحلي غير متاح. نزّل نسخة من المشروع الحالي قبل البدء من جديد.');
    const previous=await snapshot(false);
-   await saveQueue(()=>new Promise((resolve,reject)=>{
-    const tx=db.transaction('projects','readwrite');
-    tx.objectStore('projects').put(previous,'recovered-'+Date.now());
-    tx.oncomplete=resolve;tx.onabort=tx.onerror=()=>reject(tx.error||Error('تعذّر حفظ المشروع السابق.'))
-   }))
+   await saveQueue(()=>repository.put('recovered-'+Date.now(),previous))
   }
   scenes=[];selected=0;time=0;demo=true;soundBuffer=null;soundAsset=null;cache={};clearRemoved();
   setTitle('مشروع وايت بورد');showAudio();refresh();choosePanel('scene');queueSave();

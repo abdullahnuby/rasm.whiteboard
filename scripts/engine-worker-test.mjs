@@ -12,6 +12,7 @@ const responses = [];
 context.postMessage = message => responses.push(message);
 const sources = {
   'engine-v2.js': await readFile('dist/engine-v2.js', 'utf8'),
+  'editor-core.js': await readFile('dist/editor-core.js','utf8'),
   'engine.js': await readFile('dist/engine.js', 'utf8')
 };
 context.importScripts = (...names) => {
@@ -69,3 +70,5 @@ for (const line of planned.result.plan.lines) {
   assert.ok(line.cumulative[line.cumulative.length - 1] >= 0);
 }
 console.log('RASM image Worker analysis + planning tests passed.');
+
+const doc=new context.RasmEditorCore.ElementDocument(width,height,analysed.result.engineAnalysisV2.rasterLabels);const left=Uint8Array.from({length:width*height},(_,p)=>p%width<24?1:0),right=Uint8Array.from(left,v=>1-v);doc.add(left,'left');const second=doc.add(right,'right');doc.move(second,-1);context.onmessage({data:{id:3,action:'plan',width,height,analysis:analysed.result.engineAnalysisV2,elementDocument:doc.snapshot,baseLines:[path],centerBaseLines:[path],options:{direction:'rtl'}}});const authored=responses.shift();assert.equal(authored.error,undefined);assert.deepEqual(Array.from(authored.result.plan.elements,e=>e.id),Array.from(doc.snapshot.items,e=>e.key));console.log('RASM accepted masks route in author order inside actual image Worker.');

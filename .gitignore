@@ -4,3 +4,15 @@ dist/vendor/
 dist/engine-v2.js
 dist/engine-v2.js.map
 .DS_Store
+
+dist/editor-core.js
+dist/editor-core.js.map
+
+experiments/element-segmentation/models/
+experiments/element-segmentation/output/
+__pycache__/
+
+dist/models/
+
+dist/service-worker.js
+dist/offline-cache.json

@@ -1,11 +1,17 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="رَسم">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#1b1832">
 <meta name="description" content="حوّل صورك إلى فيديو وايت بورد، واضبط الرسم والتعليق الصوتي ثم صدّر الفيديو.">
 <title>رَسم | استوديو الوايت بورد</title>
 <link rel="stylesheet" href="style.css">
+<link rel="manifest" href="app.webmanifest">
+<link rel="icon" href="assets/app-icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
 <header>
 <button id="mobileMenu" class="mobileOnly menuButton" aria-label="فتح القائمة الجانبية" aria-controls="mobileDrawer" aria-expanded="false"><span aria-hidden="true">☰</span></button>
 <div class="logo">
@@ -180,6 +186,7 @@
 <option value="fill">خطوط ثم الصورة الأصلية</option>
 </select>
 </label>
+<label>كشف الصورة<select id="revealMode"><option value="direct">ألوان مباشرة</option><option value="outline-color">حدود أولًا ثم ألوان · تجريبي</option></select></label>
 <label>طريقة حركة اليد<select id="motionStyle">
 <option value="smart">مسارات رئيسية · حركة هادئة</option>
 <option value="contour">تفاصيل دقيقة · تتبّع الحدود</option>
@@ -190,6 +197,7 @@
 <option value="ltr">من الشمال إلى اليمين</option>
 </select>
 </label>
+<button id="elementEdit">مراجعة عناصر الصورة</button>
 <button id="zoneEdit">ترتيب مناطق الرسم</button>
 <details>
 <summary>خيارات المظهر</summary>
@@ -314,11 +322,12 @@
 </dialog>
 <dialog id="zoneDialog">
 <h2>ترتيب مناطق الرسم</h2>
-<p>حدّد عناصر المشهد بمستطيلات وفق ترتيب الرسم. تُرسم بقية التفاصيل في النهاية.</p>
+<p>حدّد مناطق المشهد بالترتيب الذي تريد رسمها به. يمكن فصل أجزاء من نفس الرسم. عند تداخل المناطق، تكون الأولوية للمنطقة الأولى، وتُرسم التفاصيل خارجها في النهاية.</p>
 <canvas id="zoneBoard" aria-label="تحديد مناطق الرسم">
 </canvas>
 <div class="actions">
 <button id="zoneUndo">تراجع عن منطقة</button>
+<button id="zoneClear">مسح كل المناطق</button>
 <button id="zoneSave">تطبيق الترتيب</button>
 <button id="zoneClose">إلغاء</button>
 </div>
@@ -336,6 +345,26 @@
 <button id="backup">تنزيل نسخة المشروع</button>
 <button id="restore">فتح نسخة محفوظة</button>
 </div>
+<section class="recoverySection" aria-labelledby="installHeading">
+<h3 id="installHeading">التطبيق على جهازك</h3>
+<p id="offlineState" role="status">جارٍ تجهيز ملفات العمل دون إنترنت…</p>
+<p>يمكن تثبيت نسخة المتصفح على الأجهزة التي تدعم ذلك، دون تحويلها إلى إصدار APK أو EXE. الحفظ مرتبط ببيانات المتصفح، وليس نسخة احتياطية.</p>
+<button id="installApp" type="button" hidden>تثبيت رَسم على الجهاز</button>
+<div id="iosInstallHelp" class="iosInstallHelp" tabindex="-1" hidden>
+<h3>التثبيت على iPhone وiPad</h3>
+<ol>
+<li>نزّل نسخة <bdi>.rasm</bdi> من مشروعك قبل التثبيت.</li>
+<li>افتح رابط رَسم في <bdi>Safari</bdi>، وليس المتصفح الداخلي لتطبيق المراسلة.</li>
+<li>افتح زر المشاركة، أو قائمة الصفحة ثم «مشاركة».</li>
+<li>اختر «إضافة إلى الشاشة الرئيسية» (<bdi>Add to Home Screen</bdi>). إن لم يظهر، ابحث عنه في «تعديل الإجراءات».</li>
+<li>فعّل «فتح كتطبيق ويب» (<bdi>Open as Web App</bdi>) إذا ظهر، ثم اضغط «إضافة».</li>
+<li>افتح أيقونة رَسم وانتظر تأكيد الجاهزية دون إنترنت. افتح نسخة مشروعك إذا لم يظهر، ولا تحذف النسخة الأصلية قبل التأكد.</li>
+</ol>
+<p>أبقِ التطبيق مفتوحًا والشاشة نشطة أثناء التحليل أو التصدير. التثبيت لا يضيف دعمًا لصيغ الفيديو التي لا يدعمها جهازك.</p>
+</div>
+<button id="protectStorage" type="button" hidden>طلب الاحتفاظ بالحفظ المحلي</button>
+<p id="storageState" role="status">قد يحذف النظام بيانات الموقع عند نقص المساحة، حتى بعد التثبيت. احتفظ بنسخة مشروع خارج المتصفح.</p>
+</section>
 <section id="recoverySection" class="recoverySection" hidden>
 <h3>مشروعات سابقة ونسخ مستردة</h3>
 <p>مشروعات احتُفظ بها عند بدء مشروع جديد أو عند تعذّر استعادة نسخة. يمكنك فتحها أو تنزيلها.</p>
@@ -354,6 +383,8 @@
 </script>
 <script src="engine-v2.js">
 </script>
+<script src="editor-core.js">
+</script>
 <script src="motion.js">
 </script>
 <script src="engine.js">
@@ -368,6 +399,8 @@
 </script>
 <script src="zones.js">
 </script>
+<script src="elements.js"></script>
 <script src="interface.js">
 </script>
+<script src="pwa.js"></script>
 </html>

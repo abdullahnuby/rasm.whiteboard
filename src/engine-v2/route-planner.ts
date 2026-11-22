@@ -188,6 +188,7 @@ export function orderElements(
   );
   if (!zones.length) return readingOrder;
   const zoneIndex = (element: ElementRecord) => {
+    if (element.manualZone !== undefined) return element.manualZone;
     const x = element.bounds.cx, y = element.bounds.cy;
     return zones.findIndex(zone =>
       x >= zone.x && y >= zone.y && x <= zone.x + zone.w && y <= zone.y + zone.h
@@ -195,19 +196,23 @@ export function orderElements(
   };
   return readingOrder.slice().sort((a, b) => {
     const za = zoneIndex(a), zb = zoneIndex(b);
-    if (za < 0 && zb < 0) return a.orderIndex - b.orderIndex;
+    // Stable sort keeps the calculated reading order inside a shared region,
+    // and for the unselected details that follow all author regions.
+    if (za < 0 && zb < 0) return 0;
     if (za < 0) return 1;
     if (zb < 0) return -1;
-    return za - zb || a.orderIndex - b.orderIndex;
+    return za - zb;
   });
 }
 
 export function finalizeElements(
   elements: readonly ElementRecord[],
   direction: Direction,
-  zones: readonly { x: number; y: number; w: number; h: number }[] = []
+  zones: readonly { x: number; y: number; w: number; h: number }[] = [],
+  authorOrder?: readonly number[]
 ): { elements: ElementPlan[]; lines: StrokePath[]; length: number; totalDistance: number } {
-  const ordered = orderElements(elements, direction, zones);
+  const ranked=new Map(authorOrder?.map((id,index)=>[id,index]));
+  const ordered = authorOrder ? elements.slice().sort((a,b)=>(ranked.get(a.id)??Infinity)-(ranked.get(b.id)??Infinity)) : orderElements(elements, direction, zones);
   const plans: ElementPlan[] = [], lines: StrokePath[] = [];
   let pointOffset = 0, travelled = 0, previous: Point | null = null;
   ordered.forEach((element, orderIndex) => {
@@ -233,7 +238,7 @@ export function finalizeElements(
     }
     plans.push({
       id: element.id, componentIds: element.componentIds.slice(), bounds: { ...element.bounds },
-      area: element.area, orderIndex, strokes, diagnostics: element.diagnostics,
+      area: element.area, orderIndex, manualZone: element.manualZone, durationWeight:element.durationWeight, strokes, diagnostics: element.diagnostics,
       startDistance, endDistance: travelled
     });
   });

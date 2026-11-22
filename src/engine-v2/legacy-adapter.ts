@@ -9,7 +9,7 @@ export function buildLegacyRevealInput(scene: {
   src?: { width: number; height: number };
   rasterLabels?: Uint32Array; lines?: DrawingPlan["lines"];
   shapeGroups?: Array<{ id: number; rasterComponentLabels: number[] }>;
-  totalDistance?: number;
+  totalDistance?: number;revealResolution?:number;
 }): RevealSceneInput {
   const width = scene.src?.width ?? 0, height = scene.src?.height ?? 0;
   const labels = scene.rasterLabels;
@@ -21,7 +21,7 @@ export function buildLegacyRevealInput(scene: {
   }
   return {
     width, height, rasterLabels: labels as Uint32Array, lines: scene.lines ?? [],
-    totalDistance: scene.totalDistance ?? 0,
+    totalDistance: scene.totalDistance ?? 0,resolution:scene.revealResolution===65536?65536:256,revealSpread:'near-pen',
     shapeGroups: (scene.shapeGroups ?? []).map(group => ({
       id: group.id, rasterComponentLabels: group.rasterComponentLabels.slice()
     }))

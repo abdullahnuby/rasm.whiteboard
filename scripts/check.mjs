@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 const html = await readFile('dist/index.html', 'utf8');
 const ids = [...html.matchAll(/ id="([^"]+)"/g)].map(match => match[1]);
 assert.equal(new Set(ids).size, ids.length, 'Duplicate HTML IDs');
-for (const file of ['app.js', 'project.js', 'zones.js', 'engine-v2.js', 'engine.js', 'engine-worker.js', 'reliability.js', 'timeline.js', 'export.js', 'motion-worker.js','offline-export.js','live-export.js','interface.js']) {
+for (const file of ['editor-core.js', 'app.js', 'project.js', 'zones.js', 'engine-v2.js', 'engine.js', 'engine-worker.js', 'reliability.js', 'timeline.js', 'export.js', 'motion-worker.js','offline-export.js','live-export.js','interface.js']) {
   const js = await readFile('dist/' + file, 'utf8');
   if (file === 'engine-worker.js') {
     assert.ok(js.includes("'engine-v2.js'"), 'Image worker must load the shared Engine v2 core');
@@ -37,11 +37,11 @@ assert.ok(html.indexOf('export.js') < html.indexOf('app.js'), 'export.js must lo
 const motionSource=await readFile('dist/motion.js','utf8');
 const imageEngineSource=await readFile('dist/engine.js','utf8');
 const imageWorkerSource=await readFile('dist/engine-worker.js','utf8');
-assert.ok(motionSource.includes('async function applyZones(scene)'), 'Drawing plans must be requested asynchronously');
+assert.ok(motionSource.includes('async function applyZones(scene, options='), 'Drawing plans must be requested asynchronously');
 assert.ok(!motionSource.includes('RasmWhiteboardCore.applyToLegacyScene(scene)'), 'The UI thread must not build drawing plans');
 assert.ok(!motionSource.includes('buildSynchronousSchedule'), 'Reveal worker failures must not fall back to blocking main-thread work');
 assert.ok(motionSource.includes('انتهت مهلة جدولة البكسلات'), 'Reveal timeout must be visible and actionable');
-assert.ok(imageEngineSource.includes('async function planAsync(scene)'), 'Image engine must expose Worker-backed planning');
+assert.ok(imageEngineSource.includes('async function planAsync(scene, overrides'), 'Image engine must expose Worker-backed planning');
 assert.ok(imageEngineSource.includes('timed out after'), 'Image worker requests must have a watchdog');
 assert.ok(imageWorkerSource.includes("action === 'plan'"), 'Image worker must accept off-thread plan requests');
 assert.ok(imageEngineSource.includes('cancelPending'), 'Image worker tasks must support explicit cancellation');

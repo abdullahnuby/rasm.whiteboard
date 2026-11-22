@@ -1,10 +1,10 @@
 'use strict';
 importScripts('engine-v2.js','motion.js');
 self.onmessage = event => {
-  const { id, width, height, totalDistance, lines, rasterLabels, shapeGroups } = event.data || {};
+  const { id, width, height, totalDistance, lines, rasterLabels, shapeGroups,revealResolution } = event.data || {};
   try {
     const scene = {
-      src: { width, height }, totalDistance, lines, rasterLabels, shapeGroups,
+      src: { width, height }, totalDistance, lines, rasterLabels, shapeGroups,revealResolution,
       mode: 'original'
     };
     const result = self.RasmWhiteboardCore.buildLegacyRevealSchedule(scene);

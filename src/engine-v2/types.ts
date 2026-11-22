@@ -5,9 +5,9 @@ export type Point = readonly [number, number];
 export interface Rect { x: number; y: number; width: number; height: number; cx: number; cy: number; }
 export interface RasterFrame { width: number; height: number; pixels: Uint8ClampedArray; }
 export interface ComponentRecord { id: number; area: number; bounds: Rect; }
-export interface RasterElement { id: number; componentIds: number[]; area: number; bounds: Rect; orderIndex: number; }
+export interface RasterElement { id: number; componentIds: number[]; area: number; bounds: Rect; orderIndex: number; manualZone?: number; durationWeight?: number; }
 export interface ElementRecord {
-  id: number; componentIds: number[]; area: number; bounds: Rect; orderIndex: number;
+  id: number; componentIds: number[]; area: number; bounds: Rect; orderIndex: number; manualZone?: number; durationWeight?: number;
   strokes: StrokePath[];
   diagnostics: { source: "segmented" | "orphan-path"; tracedComponentIds: number[]; warnings: string[] };
 }
@@ -17,6 +17,8 @@ export interface StrokePath {
 }
 export interface RasterAnalysis {
   schemaVersion: 2; width: number; height: number; rasterLabels: Uint32Array;
+  authorOrder?: boolean;
+  unassignedElementId?: number;
   components: ComponentRecord[]; elements: RasterElement[];
   background: [number, number, number]; foregroundDensity: number;
   backend: "connected-components-8" | "opencv-connected-components-8";
@@ -28,7 +30,7 @@ export interface SceneOptions {
   simplifyTolerance?: number;
 }
 export interface ElementPlan {
-  id: number; componentIds: number[]; bounds: Rect; area: number; orderIndex: number;
+  id: number; componentIds: number[]; bounds: Rect; area: number; orderIndex: number; manualZone?: number; durationWeight?: number;
   strokes: StrokePath[]; diagnostics: ElementRecord["diagnostics"];
   startDistance: number; endDistance: number;
 }
@@ -44,10 +46,12 @@ export interface TravelSegment {
 export interface RevealSceneInput {
   width: number; height: number; totalDistance: number; rasterLabels: Uint32Array;
   lines: StrokePath[];
+  resolution?:256|65536;
+  revealSpread?:'legacy'|'near-pen';
   shapeGroups: Array<{ id: number; rasterComponentLabels: number[] }>;
 }
 export interface RevealPlan {
-  order: Uint32Array; ends: Uint32Array; timings: Uint8Array; totalPixels: number;
+  order: Uint32Array; ends: Uint32Array; timings: Uint8Array|Uint16Array; totalPixels: number;
   totalDistance: number; elementWindows: Array<{ elementId: number; start: number; end: number }>;
   diagnostics: { scheduledPixels: number; backgroundPixels: number; unscheduledPixels: number; unseededComponents: number[] };
 }

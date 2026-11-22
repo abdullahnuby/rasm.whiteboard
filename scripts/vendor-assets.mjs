@@ -38,9 +38,15 @@ async function license(candidates) {
 
 const paperLicense = await license(["node_modules/paper/LICENSE.txt", "node_modules/paper/LICENSE"]);
 await writeFile(resolve(destination, "THIRD-PARTY-LICENSES.md"),
-  "# Third-party browser engines\n\n## Paper.js 0.17.0 — MIT\n\n" + paperLicense);
+  "# Third-party browser engines\n\n## Paper.js 0.17.0, MIT\n\n" + paperLicense);
 const manifest = {
   paper: { version: "0.17.0", license: "MIT", ...paper }
 };
 await writeFile(resolve(destination, "dependencies.json"), JSON.stringify(manifest, null, 2) + "\n");
 console.log("RASM local browser dependencies vendored:", JSON.stringify({ paper: paper.bytes }));
+
+const ortDestination=resolve(destination,'ort');await mkdir(ortDestination,{recursive:true});
+const ortFiles=[];for(const file of ['ort.wasm.min.js','ort-wasm-simd-threaded.mjs','ort-wasm-simd-threaded.wasm']){await copyFile(resolve(root,'node_modules/onnxruntime-web/dist',file),resolve(ortDestination,file));const data=await readFile(resolve(ortDestination,file));ortFiles.push({file,bytes:data.length,sha256:createHash('sha256').update(data).digest('hex')})}
+const ortLicense=await license(['licenses/ONNXRUNTIME-LICENSE.txt']);await writeFile(resolve(destination,'THIRD-PARTY-LICENSES.md'),(await readFile(resolve(destination,'THIRD-PARTY-LICENSES.md'),'utf8'))+'\n\n## ONNX Runtime Web 1.23.2, MIT\n\n'+ortLicense);manifest.onnxRuntime={version:'1.23.2',license:'MIT',optionalInferenceOnly:true,files:ortFiles};await writeFile(resolve(destination,'dependencies.json'),JSON.stringify(manifest,null,2)+'\n');console.log('Optional local ONNX Runtime:',ortFiles.reduce((n,f)=>n+f.bytes,0),'bytes. Model weights are separate.');
+
+await copyFile(resolve(root,'licenses/ONNXRUNTIME-ThirdPartyNotices.txt'),resolve(ortDestination,'ThirdPartyNotices.txt'));

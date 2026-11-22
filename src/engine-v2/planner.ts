@@ -2,6 +2,7 @@ import { boundsOfPoints, distance, pathLength } from "./geometry.js";
 import { assignPathsToElements } from "./path-ownership.js";
 import { traceComponentOutline } from "./outline-tracer.js";
 import { finalizeElements } from "./route-planner.js";
+import { partitionDrawingRegions } from "./drawing-regions.js";
 import type { Direction, DrawingPlan, ElementRecord, RasterAnalysis, SceneOptions, StrokePath } from "./types.js";
 
 function nearestComponentPixel(
@@ -96,8 +97,14 @@ function emptyStrokes(elements: readonly RasterAnalysis["elements"][number][]): 
   }));
 }
 
-function attachOrphanPaths(elements: ElementRecord[], paths: readonly StrokePath[], firstId: number): number {
+function attachOrphanPaths(elements: ElementRecord[], paths: readonly StrokePath[], firstId: number, remainderId?:number): number {
   let nextId = firstId, count = 0;
+  if(remainderId!==undefined){
+    const valid=paths.filter(path=>path.points.length>=2);if(!valid.length)return 0;
+    let remainder=elements.find(element=>element.id===remainderId);
+    if(!remainder){remainder={id:remainderId,componentIds:[],area:0,bounds:boundsOfPoints(valid.flatMap(path=>path.points)),orderIndex:elements.length,durationWeight:.01,strokes:[],diagnostics:{source:'orphan-path',tracedComponentIds:[],warnings:[]}};elements.push(remainder)}
+    remainder.strokes.push(...valid.map(path=>({...path,source:'orphan' as const,elementId:remainderId,shapeId:remainderId})));return valid.length;
+  }
   for (const path of paths) {
     if (path.points.length < 2) continue;
     elements.push({
@@ -119,6 +126,7 @@ export function buildDrawingPlan(
   contourPaths: readonly StrokePath[],
   options: SceneOptions = {}
 ): DrawingPlan {
+  analysis = analysis.authorOrder ? analysis : partitionDrawingRegions(analysis, options.zones ?? []);
   const direction: Direction = options.direction ?? "rtl";
   const motionStyle = options.motionStyle ?? "smart";
   const elements: ElementRecord[] = emptyStrokes(analysis.elements);
@@ -186,7 +194,7 @@ export function buildDrawingPlan(
   }
 
   const maxId = elements.reduce((max, element) => Math.max(max, element.id), 0);
-  const orphanCount = attachOrphanPaths(elements, primary.orphanPaths, maxId + 1);
+  const orphanCount = attachOrphanPaths(elements, primary.orphanPaths, maxId + 1,analysis.authorOrder?analysis.unassignedElementId:undefined);
   const componentOwners = new Set(elements.flatMap(element => element.componentIds));
   const labelsWithoutElements = analysis.components.filter(component => !componentOwners.has(component.id)).length;
   const componentRouteSet = new Set(elements.flatMap(element =>
@@ -194,7 +202,7 @@ export function buildDrawingPlan(
   ));
   const componentsWithoutStrokes = analysis.components.filter(component => !componentRouteSet.has(component.id)).length;
   const warnings = analysis.diagnostics.warnings.slice();
-  if (orphanCount) warnings.push(orphanCount + " vector paths were kept as independent elements.");
+  if (orphanCount) warnings.push(orphanCount + (analysis.authorOrder?" unassigned vector paths were retained in the remainder.":" vector paths were kept as independent elements."));
   if (componentsWithoutStrokes) warnings.push(componentsWithoutStrokes + " raster components still have no pen path.");
   const diagnostics = {
     ...analysis.diagnostics,
@@ -210,7 +218,8 @@ export function buildDrawingPlan(
     componentsWithoutStrokes,
     warnings
   };
-  const finalized = finalizeElements(elements, direction, options.zones ?? []);
+  const pixelZones = (options.zones ?? []).map(zone => ({ x: zone.x * analysis.width, y: zone.y * analysis.height, w: zone.w * analysis.width, h: zone.h * analysis.height }));
+  const finalized = finalizeElements(elements, direction, pixelZones, analysis.authorOrder ? analysis.elements.map(element=>element.id) : undefined);
   const plans = finalized.elements.map(plan => {
     const element = elements.find(item => item.id === plan.id);
     if (element) plan.diagnostics = element.diagnostics;

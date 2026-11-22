@@ -22,9 +22,9 @@ function overlayEnabled(scene){
 
 // Plan generation is kept off the UI thread. The image Worker owns the expensive
 // component/path assignment and route planning work.
-async function applyZones(scene){
+async function applyZones(scene, options={}){
  if(!globalThis.RasmImageEngine?.planAsync)throw new Error('RASM image Worker is not available.');
- return globalThis.RasmImageEngine.planAsync(scene);
+ return globalThis.RasmImageEngine.planAsync(scene,options);
 }
 
 const revealSchedules=new WeakMap(),revealQueued=new WeakSet(),revealErrors=new WeakMap(),revealJobs=new Map();
@@ -60,6 +60,7 @@ function getRevealWorker(){
     return;
    }
    revealSchedules.set(job.lines,{width:job.width,height:job.height,plan:event.data.plan});
+   if(typeof globalThis.dispatchEvent==='function')globalThis.dispatchEvent(new CustomEvent('rasm-schedule-ready',{detail:{lines:job.lines}}));
   };
   revealWorker.onerror=event=>{
    const detail=event?.message||event?.error?.message||'unknown worker error';
@@ -92,7 +93,7 @@ function requestColorSchedule(scene){
  try{
   const rasterLabels=labels.slice();
   worker.postMessage({
-   id,width,height,totalDistance:scene.totalDistance,
+   id,width,height,totalDistance:scene.totalDistance,revealResolution:65536,
    lines:lines.map(line=>({
     id:line.id,start:line.start,elementId:line.elementId,shapeId:line.shapeId,
     componentId:line.componentId,source:line.source,points:line.points
@@ -126,7 +127,7 @@ async function prepareColorSchedule(scene){
  }
 }
 function revealPixels(layer,fraction){
- const count=layer.ends[Math.min(256,Math.max(0,Math.floor(256*fraction)))];
+ const resolution=layer.ends.length-1,count=layer.ends[Math.min(resolution,Math.max(0,Math.floor(resolution*fraction)))];
  if(count===layer.count)return false;
  if(count<layer.count){layer.output.fill(0);layer.count=0}
  for(let i=layer.count;i<count;i++){const pixel=layer.order[i];layer.output[pixel]=layer.source[pixel]}
@@ -135,38 +136,9 @@ function revealPixels(layer,fraction){
 function sceneSeconds(scene){return scene.duration/(scene.speed||1)}
 
 const physicalTravelPlans=new WeakMap();
+// Compatibility adapter only. The typed renderer and reveal worker use the same travel model.
 function strokeProgress(scene,fraction){
- if(!scene.lines.length)return {target:0,tip:null,drawing:false,progress:Math.max(0,Math.min(1,fraction||0))};
  let plan=physicalTravelPlans.get(scene.lines);
- if(!plan){
-  let end=0,previous=null;
-  const segments=scene.lines.map(line=>{
-   const points=line.points,first=points[0];
-   const cumulative=line.cumulative&&(line.cumulative instanceof Float32Array||line.cumulative instanceof Float64Array)
-    ?line.cumulative
-    :(()=>{const values=new Float32Array(points.length);for(let i=1;i<points.length;i++)values[i]=values[i-1]+Math.hypot(points[i][0]-points[i-1][0],points[i][1]-points[i-1][1]);return values})();
-   const gap=previous?Math.hypot(first[0]-previous[0],first[1]-previous[1]):0;
-   const begin=end,draw=begin+gap,stroke=Math.max(.01,cumulative.at(-1));
-   end=draw+stroke;const segment={begin,draw,end,previous,first,line,cumulative};
-   previous=points.at(-1);return segment;
-  });
-  plan={segments,end};physicalTravelPlans.set(scene.lines,plan);
- }
- if(!plan.segments.length)return {target:0,tip:null,drawing:false,progress:0};
- const progress=Math.min(1,Math.max(0,Number.isFinite(fraction)?fraction:0)),travelled=progress*plan.end;
- let low=0,high=plan.segments.length-1;
- while(low<high){const mid=(low+high)>>1;if(travelled>=plan.segments[mid].end)low=mid+1;else high=mid}
- const segment=plan.segments[low];
- if(travelled<segment.draw){
-  const ratio=segment.draw>segment.begin?(travelled-segment.begin)/(segment.draw-segment.begin):1;
-  const tip=segment.previous?segment.first.map((v,i)=>segment.previous[i]+(v-segment.previous[i])*ratio):segment.first;
-  return {target:segment.line.start,tip,drawing:false,progress};
- }
- if(progress===1)return {target:scene.length,tip:segment.line.points.at(-1),drawing:false,progress:1};
- const along=Math.max(0,travelled-segment.draw),cumulative=segment.cumulative;
- let left=0,right=cumulative.length-1;
- while(left<right){const mid=(left+right)>>1;if(cumulative[mid]>along)right=mid-1;else left=mid}
- const a=segment.line.points[left],b=segment.line.points[Math.min(left+1,cumulative.length-1)];
- const span=cumulative[left+1]===undefined?0:cumulative[left+1]-cumulative[left],ratio=span?Math.min(1,(along-cumulative[left])/span):0;
- return {target:Math.min(scene.length,segment.line.start+left+ratio),tip:a.map((v,i)=>v+(b[i]-v)*ratio),drawing:true,progress};
+ if(!plan){plan=RasmEditorCore.createMotionPlan(scene.lines,scene.length);physicalTravelPlans.set(scene.lines,plan)}
+ return RasmEditorCore.poseAt(plan,fraction)
 }

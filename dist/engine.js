@@ -504,36 +504,39 @@
     return makeScene(name, source, result, handHint);
   }
 
-  async function planAsync(scene) {
+  let scenePlanGate;
+  async function planAsync(scene, overrides = {}) {
+    const isCurrent=(scenePlanGate??=new root.RasmEditorCore.RevisionGate()).issue(scene);
     const width = scene?.src?.width || 0, height = scene?.src?.height || 0;
     const existing = scene?.engineAnalysisV2;
     if (!width || !height || !existing?.rasterLabels || existing.rasterLabels.length !== width * height) {
       throw new Error('Engine v2 cannot plan this scene: raster segmentation is missing or invalid.');
     }
+    const elementState=Object.prototype.hasOwnProperty.call(overrides,'elementDocument')?overrides.elementDocument:scene.elementDocument;
     const rasterLabels = existing.rasterLabels.slice();
     const analysis = { ...existing, rasterLabels };
     let response;
     try {
       response = await requestWorker({
         action: 'plan', operation: 'drawing-plan generation',
-        width, height, analysis,
+        width, height, analysis, elementDocument:elementState,
         centerBaseLines: scene.centerBaseLines || [],
         baseLines: scene.baseLines || [],
         options: {
-          direction: scene.elementDirection || 'rtl',
-          motionStyle: scene.motionStyle || 'smart',
-          zones: scene.zones || []
+          direction: overrides.direction ?? scene.elementDirection ?? 'rtl',
+          motionStyle: overrides.motionStyle ?? scene.motionStyle ?? 'smart',
+          zones: overrides.zones ?? scene.zones ?? []
         }
       }, [rasterLabels.buffer], 60000);
     } catch (error) {
       throw new Error('تعذّر بناء خطة الرسم خارج الواجهة: ' + String(error?.message || error));
     }
+    if(!isCurrent())throw new DOMException('Drawing plan superseded by a newer request.','AbortError');
     const plan = response?.plan;
     if (!plan || !plan.rasterLabels || plan.rasterLabels.length !== width * height) {
       throw new Error('Engine worker returned an incomplete drawing plan.');
     }
-    // Reuse the returned ownership map for analysis, plan and reveal scheduling.
-    scene.engineAnalysisV2.rasterLabels = plan.rasterLabels;
+    // Keep the source segmentation immutable. A region plan can have different component IDs.
     scene.enginePlanV2 = plan;
     scene.engineDiagnostics = plan.diagnostics;
     scene.engineScheduleError = undefined;

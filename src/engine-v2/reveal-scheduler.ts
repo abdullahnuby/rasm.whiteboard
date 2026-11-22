@@ -58,8 +58,8 @@ function collectComponentBounds(labels: Uint32Array, width: number, height: numb
 
 function scheduleComponent(
   input: RevealSceneInput, componentId: number, elementId: number, windowStart: number, windowEnd: number,
-  segments: readonly TravelSegment[], timings: Uint8Array, coverage: Uint8Array,
-  bounds: ComponentBounds, queue: Uint32Array, geodesic: Uint32Array, originTime: Uint8Array
+  segments: readonly TravelSegment[], timings: Uint8Array|Uint16Array, coverage: Uint8Array,
+  bounds: ComponentBounds, queue: Uint32Array, geodesic: Uint32Array, originTime: Uint8Array|Uint16Array, maximumTime:number
 ): void {
   const { width, height, rasterLabels, totalDistance } = input;
   const minX = Math.max(0, bounds.minX - 1), maxX = Math.min(width - 1, bounds.maxX + 1);
@@ -72,7 +72,7 @@ function scheduleComponent(
       const pixel = nearestComponentPixel(rasterLabels, width, height, point[0], point[1], componentId);
       if (pixel < 0) continue;
       const travelled = segment.draw + segment.cumulative[Math.min(pointIndex, segment.cumulative.length - 1)];
-      const time = Math.max(windowStart, Math.min(windowEnd, Math.floor(255 * travelled / totalDistance)));
+      const time = Math.max(windowStart, Math.min(windowEnd, Math.floor(maximumTime * travelled / totalDistance)));
       const current = seeds.get(pixel);
       if (current === undefined || time < current) seeds.set(pixel, time);
     }
@@ -110,8 +110,15 @@ function scheduleComponent(
     const timeSpan = Math.max(0, windowEnd - windowStart);
     const seedProgress = timeSpan ? Math.max(0, Math.min(1, (originTime[pixel] - windowStart) / timeSpan)) : 1;
     const spatialProgress = maximumDistance > 0 ? hops / maximumDistance : 1;
-    const progress = seedProgress + (1 - seedProgress) * spatialProgress;
-    timings[pixel] = Math.max(windowStart, Math.min(windowEnd, Math.floor(windowStart + progress * timeSpan)));
+    // The legacy spread stretches distance from the pen over the entire remaining
+    // element window. That leaves distant edges and Arabic strokes incomplete until
+    // the end, even after the hand has passed them. Local spread consumes actual
+    // path-distance time instead: a pixel two geodesic steps from a seed trails by
+    // two units of physical pen travel, not by most of the element duration.
+    const proposed=input.revealSpread==='near-pen'
+      ? originTime[pixel]+hops*maximumTime/totalDistance
+      : windowStart+(seedProgress+(1-seedProgress)*spatialProgress)*timeSpan;
+    timings[pixel] = Math.max(windowStart, Math.min(windowEnd, Math.floor(proposed)));
     coverage[pixel] = 1;
   }
 }
@@ -122,7 +129,8 @@ export function buildRevealSchedule(input: RevealSceneInput): RevealPlan {
   if (rasterLabels.length !== totalPixels) throw new TypeError("Raster ownership map has invalid dimensions.");
   const travel = buildTravelSegments(lines), totalDistance = travel.totalDistance;
   if (!(totalDistance > 0)) throw new Error("Cannot schedule a scene without a physical hand route.");
-  const timings = new Uint8Array(totalPixels), coverage = new Uint8Array(totalPixels);
+  const resolution=input.resolution===65536?65536:256,maximumTime=resolution-1,TimingArray=resolution===65536?Uint16Array:Uint8Array;
+  const timings = new TimingArray(totalPixels), coverage = new Uint8Array(totalPixels);
   const elementSegments = new Map<number, TravelSegment[]>();
   for (const segment of travel.segments) {
     const list = elementSegments.get(segment.elementId) ?? [];
@@ -133,12 +141,12 @@ export function buildRevealSchedule(input: RevealSceneInput): RevealPlan {
     if (!segments.length) throw new Error("Element " + group.id + " has no hand path.");
     return {
       elementId: group.id,
-      start: Math.max(0, Math.floor(255 * segments[0].draw / totalDistance)),
-      end: Math.min(255, Math.ceil(255 * segments[segments.length - 1].end / totalDistance))
+      start: Math.max(0, Math.floor(maximumTime * segments[0].draw / totalDistance)),
+      end: Math.min(maximumTime, Math.ceil(maximumTime * segments[segments.length - 1].end / totalDistance))
     };
   });
   const boundsByLabel = collectComponentBounds(rasterLabels, width, height);
-  const queue = new Uint32Array(totalPixels), geodesic = new Uint32Array(totalPixels), originTime = new Uint8Array(totalPixels);
+  const queue = new Uint32Array(totalPixels), geodesic = new Uint32Array(totalPixels), originTime = new TimingArray(totalPixels);
   const unseededComponents: number[] = [];
   for (const group of shapeGroups) {
     const window = elementWindows.find(item => item.elementId === group.id)!;
@@ -147,7 +155,7 @@ export function buildRevealSchedule(input: RevealSceneInput): RevealPlan {
       if (!bounds) { unseededComponents.push(componentId); continue; }
       try {
         scheduleComponent({ ...input, totalDistance }, componentId, group.id, window.start, window.end,
-          elementSegments.get(group.id) ?? [], timings, coverage, bounds, queue, geodesic, originTime);
+          elementSegments.get(group.id) ?? [], timings, coverage, bounds, queue, geodesic, originTime,maximumTime);
       } catch (error) {
         unseededComponents.push(componentId);
       }
@@ -161,7 +169,7 @@ export function buildRevealSchedule(input: RevealSceneInput): RevealPlan {
   let scheduledPixels = 0, unscheduledPixels = 0;
   for (const value of coverage) { if (value) scheduledPixels++; else unscheduledPixels++; }
   if (unscheduledPixels) throw new Error(unscheduledPixels + " source pixels have no reveal timestamp.");
-  const ends = new Uint32Array(257);
+  const ends = new Uint32Array(resolution+1);
   for (const time of timings) ends[time + 1]++;
   for (let index = 1; index < ends.length; index++) ends[index] += ends[index - 1];
   const cursor = ends.slice(), order = new Uint32Array(totalPixels);

@@ -16,17 +16,19 @@ zoneBoard.onpointermove=e=>{if(origin&&e.isPrimary)paintZones(rectangle(atPointe
 zoneBoard.onpointerup=e=>{if(!origin||!e.isPrimary)return;const r=rectangle(atPointer(e));if(r.w>.008&&r.h>.008)draft.push(r);origin=null;paintZones()};
 zoneBoard.onpointercancel=()=>{origin=null;paintZones()};
 el('zoneUndo').onclick=()=>{draft.pop();paintZones()};
+el('zoneClear').onclick=()=>{draft=[];paintZones()};
 el('zoneSave').onclick=async()=>{
  if(!zoneScene)return;
- const button=el('zoneSave');button.disabled=true;
+ const button=el('zoneSave');button.disabled=true;el('zoneClose').disabled=true;el('zoneUndo').disabled=true;el('zoneClear').disabled=true;zoneBoard.inert=true;busy(true,'planning');
  el('msg').textContent='جارٍ إعادة تخطيط عناصر الرسم حسب المناطق…';
- zoneScene.zones=draft.slice();
+ const zones=draft.map(zone=>({...zone}));
  try{
-  await applyZones(zoneScene);
+  await applyZones(zoneScene,{zones});zoneScene.zones=zones;
   cache={};el('zoneDialog').close();pick(selected);queueSave();
   el('msg').textContent='تم تطبيق ترتيب مناطق الرسم.';
  }catch(error){
   el('msg').textContent='تعذّر تطبيق ترتيب المناطق: '+String(error?.message||error);
- }finally{button.disabled=false}
+ }finally{button.disabled=false;el('zoneClose').disabled=false;el('zoneUndo').disabled=false;el('zoneClear').disabled=false;zoneBoard.inert=false;busy(false)}
 };
 el('zoneClose').onclick=()=>el('zoneDialog').close();
+el('zoneDialog').addEventListener('cancel',event=>{if(loading)event.preventDefault()});

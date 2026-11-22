@@ -13,6 +13,7 @@ try{
   if(path.endsWith('.js')||path.endsWith('.mjs'))assert.ok(response.headers.get('content-type').includes('javascript'),path);
   await response.arrayBuffer()
  }
+ assert.equal((await fetch(url+'/vendor/ort/ort-wasm-simd-threaded.wasm',{method:'HEAD'})).headers.get('content-type'),'application/wasm');
  assert.equal((await fetch(url+'/missing.js')).status,404);
 }finally{server.close()}
 console.log('RASM development server resources passed.');

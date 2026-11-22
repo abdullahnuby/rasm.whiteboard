@@ -1,13 +1,13 @@
 'use strict';
 try { importScripts('vendor/paper-core.js'); } catch { /* Paper.js simplification is optional in workers. */ }
-importScripts('engine-v2.js','engine.js');
+importScripts('engine-v2.js','editor-core.js','engine.js');
 
 self.onmessage = event => {
   const message = event.data || {};
   const { id, action, width, height } = message;
   try {
     if (action === 'plan') {
-      const analysis = message.analysis;
+      const analysis = message.elementDocument ? self.RasmEditorCore.elementAnalysis(message.analysis,message.elementDocument) : message.analysis;
       if (!analysis || !(analysis.rasterLabels instanceof Uint32Array)) {
         throw new Error('Drawing-plan request has no valid raster ownership map.');
       }
