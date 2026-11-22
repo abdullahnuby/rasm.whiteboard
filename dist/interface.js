@@ -19,7 +19,7 @@ function refreshGuide(){
  el('fitAudio').hidden=!audio||!hasScenes;
  el('audioMatch').textContent=audio&&hasScenes?(
  Math.abs(audio.duration-total())>.3?'التسجيل '+audio.duration.toFixed(1)+' ث · الفيديو '+total().toFixed(1)+' ث':'مدة الفيديو مطابقة للتسجيل'):'';
- for(const id of ['copy','zoneEdit','allSpeed','allOriginal'])el(id).disabled=!hasScenes;
+ for(const id of ['copy','zoneEdit','allSpeed','allOriginal','allOutline'])el(id).disabled=!hasScenes;
  syncDrawer();
  el('inspectorTitle').textContent=hasScenes?'خصائص المشهد '+(selected+1):'إعدادات المشروع'
 }
@@ -81,6 +81,7 @@ function syncDrawer(){
  el('editSceneMobile').disabled=blocked||!scenes.length;
  el('drawerExport').disabled=blocked||!scenes.length;
  el('exportDownload').hidden=el('download').hidden||blocked;
+ el('exportDownload').href=el('download').href;el('exportDownload').download=el('download').download;
  for(const id of ['drawerProject','drawerImport','drawerAudio','drawerExportOptions'])el(id).disabled=blocked;
 }
 function closeDrawer(){
@@ -122,5 +123,3 @@ el('drawerAudio').onclick=()=>{closeDrawer();el('soundFile').click()};
 el('drawerExportOptions').onclick=()=>choosePanel('video');
 el('drawerExport').onclick=()=>{closeDrawer();el('export').click()};
 moveInspector();
-
-el('exportDownload').onclick=()=>el('download').click();

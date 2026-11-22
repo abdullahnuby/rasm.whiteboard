@@ -72,8 +72,10 @@
 </div>
 <video id="exportPreview" controls playsinline preload="metadata" hidden aria-label="معاينة الفيديو المُصدّر">
 </video>
+<p id="exportError" class="exportError" role="alert" hidden></p>
+<button id="exportDiagnostics" type="button" hidden>تنزيل تقرير التوافق، بدون صور أو صوت</button>
 <button id="exportCancel" type="button">إلغاء التصدير</button>
-<button id="exportDownload" class="primary" hidden>تنزيل الفيديو</button>
+<a id="exportDownload" class="primary downloadButton" hidden download>تنزيل الفيديو</a>
 <button id="exportClose" type="button" hidden>إخفاء</button>
 </section>
 <nav class="workflow" aria-label="مراحل إنشاء الفيديو">
@@ -187,6 +189,7 @@
 </select>
 </label>
 <label>كشف الصورة<select id="revealMode"><option value="direct">ألوان مباشرة</option><option value="outline-color">حدود أولًا ثم ألوان · تجريبي</option></select></label>
+<button id="allOutline">تطبيق الحدود ثم ألوان المصدر على كل المشاهد</button>
 <label>طريقة حركة اليد<select id="motionStyle">
 <option value="smart">مسارات رئيسية · حركة هادئة</option>
 <option value="contour">تفاصيل دقيقة · تتبّع الحدود</option>
@@ -293,11 +296,11 @@
 <details>
 <summary>توافق التصدير</summary>
 <label>محرك التصدير<select id="exportEngine">
-<option value="auto">دقيق · معالجة كل إطار</option>
+<option value="auto">تلقائي · دقيق إن دعمه المتصفح</option>
 <option value="live">متوافق · تسجيل في الوقت الحقيقي</option>
 </select>
 </label>
-<p>التسجيل المتوافق يتطلب إبقاء الصفحة في المقدمة. المحرك الدقيق يستخدم التوقيت الفعلي لكل إطار.</p>
+<p>التصدير الدقيق يعالج كل إطار. عند تعذّر الترميز قد يُستخدم التسجيل المتوافق بالدقة المختارة؛ تظهر الطريقة في حالة التصدير. التسجيل المتوافق يتطلب إبقاء الصفحة في المقدمة، وقد تقل سلاسة الحركة حسب أداء الجهاز.</p>
 </details>
 </section>
 </aside>

@@ -404,7 +404,7 @@
     return { src, width, height, pixels: context.getImageData(0, 0, width, height).data };
   }
   function makeScene(name, source, result, handHint) {
-    const defaults = { speed: 0.2, mode: 'original', tone: 4, sourceHand: 'auto', handSize: 100,
+    const defaults = { revealMode: 'outline-color', speed: 0.2, mode: 'original', tone: 4, sourceHand: 'auto', handSize: 100,
       weight: 1.4, side: '1', hold: 18, paper: '#ffffff', transition: 'cut', elementDirection: 'rtl' };
     // Async image analysis transfers this pixel buffer to the Worker. Do not
     // read the same full-resolution canvas back onto the UI thread afterward.

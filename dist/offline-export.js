@@ -16,8 +16,8 @@
   const candidates=format==='webm'?['webm']:format==='mp4'?['mp4']:['mp4','webm'];
   for(const type of candidates){
    const videoCodec=type==='mp4'?'avc':'vp8',audioCodec=type==='mp4'?'aac':'opus';
-   if(await m.canEncodeVideo(videoCodec,{width:canvas.width,height:canvas.height,quality,frameRate:24})&&
-      (!audio||await m.canEncodeAudio(audioCodec,{sampleRate,numberOfChannels:channels}))){
+   if(await withDeadline(m.canEncodeVideo(videoCodec,{width:canvas.width,height:canvas.height,quality,frameRate:24}),10000)&&
+      (!audio||await withDeadline(m.canEncodeAudio(audioCodec,{sampleRate,numberOfChannels:channels}),10000))){
     selected={type,videoCodec,audioCodec};break
    }
   }
