@@ -76,3 +76,7 @@ header .menuButton:hover:enabled{background:#38304d;color:white}
 .exportError{width:100%;margin:4px 0;padding:12px;border:1px solid #e4b6b6;border-radius:8px;background:#fff2f2;color:#842f3a;font-size:14px;line-height:1.8;overflow-wrap:anywhere}
 a.downloadButton{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;border:1px solid transparent;border-radius:8px;font-weight:700;font-size:14px;padding:8px 12px;touch-action:manipulation;min-height:44px;cursor:pointer}a.downloadButton:hover{background:#5033ab}
 @media(max-width:760px){.elementToolbar button,.elementFooter button,.elementItem button,.elementProposal button{min-height:44px}.elementToolbar label{flex-wrap:wrap}.elementToolbar select{font-size:16px;min-height:44px;max-width:100%}}
+
+.exportDeliveryStatus,.exportDiagnosticPanel{width:100%;flex-basis:100%;overflow-wrap:anywhere}.exportDeliveryStatus{padding:12px;background:#f1edff;border-radius:8px;line-height:1.8}.exportDiagnosticPanel summary{cursor:pointer;font-weight:700}.exportDiagnosticPanel textarea{display:block;width:100%;box-sizing:border-box;font:12px/1.5 monospace;white-space:pre;resize:vertical;margin:10px 0}#exportViewer{color:var(--purple);background:#f2effa}#exportShare{min-height:48px}
+
+#exportDiagnosticPanel{scroll-margin-top:84px}

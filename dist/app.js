@@ -8,6 +8,7 @@ function failForeground(error){foregroundJob?.fail(error)}
 const surface=(w,h)=>Object.assign(document.createElement('canvas'),{width:w,height:h});
 let scenes=[], selected=0, time=0, running=false, recording=false, start=0, frame=0, tone=0, demo=true, loading=false, lastUrl='', activeImport=null;
 let timelineScale=40, audioTimeline=null, timelineDrag=null, exportSession=null, lastExportRevision=null, lastExportAttempt=null;
+const exportDelivery=RasmDelivery.create();
 const defaults={revealMode:'direct',speed:.5,motionStyle:'smart',mode:'original',tone:4,sourceHand:'auto',handSize:100,weight:1.4,side:'1',hold:18,paper:'#ffffff',transition:'cut'};
 const colors=['#e6af89','#986642',null], total=()=>RasmTimeline.totalSeconds(scenes), offset=i=>RasmTimeline.layout(scenes,1)[i]?.start||0;
 function setOperationStatus(label,done=0,total=1){
@@ -357,7 +358,7 @@ async function importFiles(items){
 files.onchange=async()=>{const items=[...files.files];files.value='';await importMedia(items)};document.ondragover=e=>e.preventDefault();document.ondrop=e=>{e.preventDefault();importMedia([...e.dataTransfer.files])};
 el('exportDiagnostics').onclick=()=>{
  if(recording)return;
- const report={app:'rasm-mobile-export-fix-1',createdAt:new Date().toISOString(),browser:navigator.userAgent,secureContext:window.isSecureContext,
+ const report={app:'rasm-mobile-export-fix-1',delivery:exportDelivery.report(),createdAt:new Date().toISOString(),browser:navigator.userAgent,secureContext:window.isSecureContext,
   apis:{videoEncoder:typeof VideoEncoder,audioEncoder:typeof AudioEncoder,mediaRecorder:typeof MediaRecorder,captureStream:typeof board.captureStream,audioContext:typeof AudioContext},
   recorderTypes:Object.fromEntries(RasmExport.MIME_CANDIDATES.map(type=>{let supported=false;try{supported=typeof MediaRecorder==='function'&&MediaRecorder.isTypeSupported(type)}catch{}return[type,supported]})),
   attempt:lastExportAttempt};
@@ -380,6 +381,8 @@ el('export').onclick=async()=>{
  lock(true);el('exportPanel').hidden=false;el('exportPanel').scrollIntoView({block:'start'});el('exportCancel').hidden=false;el('exportCancel').disabled=false;el('exportClose').hidden=true;
  el('exportPreview').pause();el('exportPreview').hidden=true;el('download').hidden=true;el('exportError').hidden=true;el('exportError').textContent='';el('exportDiagnostics').hidden=true;
  lastExportAttempt={format:el('exportFormat').value,requestedEngine:el('exportEngine').value,hasNarration:!!soundBuffer,durationSeconds:duration,error:null};
+ exportDelivery.reset({...lastExportAttempt});
+ el('exportCopyStatus').textContent='';
  el('exportProgress').value=0;el('exportPercent').textContent='0%';el('exportLabel').textContent='تجهيز المشاهد للتصدير…';
  let wakeLock;
  try{
@@ -392,8 +395,11 @@ el('export').onclick=async()=>{
    el('exportElapsed').textContent='تجهيز المشهد '+(i+1)+' من '+scenes.length;
    await new Promise(resolve=>setTimeout(resolve,0))
   }
+  exportDelivery.event('scenes-prepared');
   time=0;cache={};exportSize();lastExportAttempt.width=board.width;lastExportAttempt.height=board.height;
+  let diagnosticProgress=-1;
   const progress=(fraction,done,count,finalizing)=>{
+   const bucket=Math.floor(fraction*10);if((finalizing?11:bucket)!==diagnosticProgress){diagnosticProgress=finalizing?11:bucket;exportDelivery.event(finalizing?'encoder-finalizing':'encoding',{engine:exportMethod,percent:Math.floor(fraction*100),done,count})}
    foregroundJob?.progress(fraction,'إنشاء الفيديو');el('exportProgress').value=fraction*100;
    el('exportPercent').textContent=Math.floor(fraction*100)+'%';
    el('exportElapsed').textContent=done+' / '+count+' إطار';
@@ -404,33 +410,40 @@ el('export').onclick=async()=>{
   const result=await RasmExport.encodeWithFallback({
    preferLive:el('exportEngine').value==='live'||typeof VideoEncoder!=='function'||(soundBuffer&&typeof AudioEncoder!=='function'),
    canLive:()=>RasmLive.canEncode(options),session,
-   offline:()=>{exportMethod='offline';return RasmOffline.encode(options)},
-   live:()=>{exportMethod='live';return RasmLive.encode(options)},
-   onFallback:()=>{msg.textContent='الترميز الدقيق غير مدعوم لهذه الصيغة على جهازك. سيُستخدم التسجيل المتوافق بالدقة المختارة؛ أبقِ التطبيق مفتوحًا حتى ينتهي.'}
+   offline:()=>{exportMethod='offline';exportDelivery.event('encoder-selected',{engine:'offline',format:options.format,width:board.width,height:board.height});return RasmOffline.encode(options)},
+   live:()=>{exportMethod='live';exportDelivery.event('encoder-selected',{engine:'live',format:options.format,width:board.width,height:board.height});return RasmLive.encode(options)},
+   onFallback:()=>{exportDelivery.event('encoder-fallback');msg.textContent='الترميز الدقيق غير مدعوم لهذه الصيغة على جهازك. سيُستخدم التسجيل المتوافق بالدقة المختارة؛ أبقِ التطبيق مفتوحًا حتى ينتهي.'}
   });
   if(session.cancelled)throw new DOMException('Cancelled','AbortError');
+  exportDelivery.event('blob-created',{bytes:result.blob.size,type:result.blob.type,method:result.method,frames:result.frames});
   if(result.blob.size<1024)throw Error('لم ينتج محرك التصدير ملفًا صالحًا.');
   el('exportLabel').textContent='التحقق من دقة الفيديو والصوت…';
-  const verified=await RasmExport.inspectOutput(result.blob,{audioRequired:!!soundBuffer,width:board.width,height:board.height});
+  exportDelivery.event('inspection-start');
+  let inspectTimer;
+  const verified=await Promise.race([RasmExport.inspectOutput(result.blob,{audioRequired:!!soundBuffer,width:board.width,height:board.height}),new Promise((_,reject)=>{inspectTimer=setTimeout(()=>reject(new Error('انتهت مهلة فحص الفيديو بعد إنشاء الملف. صوّر سجل التصدير وأعد المحاولة بمقطع أقصر.')),30000)})]).finally(()=>clearTimeout(inspectTimer));
+  exportDelivery.event('inspection-passed',verified);
   if(session.cancelled)throw new DOMException('Cancelled','AbortError');
   const preview=el('exportPreview'),oldUrl=lastUrl;
   lastUrl=URL.createObjectURL(result.blob);lastExportRevision=session.revision;preview.src=lastUrl;preview.hidden=false;preview.load();
   if(oldUrl)URL.revokeObjectURL(oldUrl);
   const link=el('download');link.href=lastUrl;link.download='rasm-whiteboard.'+RasmExport.fileExtension(result.blob.type);link.hidden=false;
+  exportDelivery.ready(result.blob,lastUrl,link.download);
   el('exportProgress').value=100;el('exportPercent').textContent='100%';
-  el('exportLabel').textContent='الفيديو جاهز للتنزيل';
+  el('exportLabel').textContent='اكتمل إنشاء الفيديو · اختر طريقة الحفظ أدناه';
   el('exportElapsed').textContent=duration.toFixed(1)+' ثانية · '+verified.width+'×'+verified.height+' · '+verified.videoCodec+(verified.audioCodec?' / '+verified.audioCodec:'')+' · '+(result.method==='live'?'تسجيل متوافق':result.frames+' إطار')+' · '+(result.blob.size/1048576).toFixed(1)+' MB';
   msg.textContent=result.method==='live'?'اكتمل التسجيل المتوافق. الدقة المختارة محفوظة، لكن سلاسة الحركة تعتمد على أداء المتصفح أثناء التسجيل. عاين الفيديو قبل اعتماده.':'اكتمل التصدير الدقيق لكل إطار. يمكنك معاينة الفيديو وتنزيله من الزر أدناه.';
  }catch(error){
   const cancelled=session.cancelled||error.name==='AbortError';
   el('exportLabel').textContent=cancelled?'تم إلغاء التصدير':'تعذّر إكمال التصدير';
   msg.textContent=cancelled?'يمكنك متابعة التحرير وإعادة التصدير.':String(error.message||error);
-  el('exportError').textContent=msg.textContent;el('exportError').hidden=false;
+  el('exportError').textContent=msg.textContent;el('exportError').hidden=false;el('exportDeliveryStatus').textContent=cancelled?'أُلغي التصدير. لا يوجد ملف جديد للحفظ.':'لم يكتمل اعتماد الفيديو. افتح سجل التصدير أدناه وصوّره أو انسخه.';
+  exportDelivery.event(cancelled?'cancelled':'export-error',{name:error.name||'Error',message:String(error.message||error),engine:exportMethod});
   lastExportAttempt.error={name:error.name||'Error',message:String(error.message||error)};lastExportAttempt.usedEngine=exportMethod;el('exportDiagnostics').hidden=cancelled;
  }finally{
   try{await wakeLock?.release()}catch{}try{await preparedAudio?.context?.close()}catch{}
   stop();recordBus=null;exportSession=null;lock(false);time=Math.min(previousTime,total());size();
-  el('exportCancel').hidden=true;el('exportClose').hidden=false;el('exportCancel').disabled=false
+  el('exportCancel').hidden=true;el('exportClose').hidden=false;el('exportCancel').disabled=false;
+  el('exportDeliveryStatus').scrollIntoView({block:'center',behavior:'smooth'});
  }
 };
 

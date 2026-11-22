@@ -73,6 +73,17 @@
 <video id="exportPreview" controls playsinline preload="metadata" hidden aria-label="معاينة الفيديو المُصدّر">
 </video>
 <p id="exportError" class="exportError" role="alert" hidden></p>
+<p id="exportDeliveryStatus" class="exportDeliveryStatus" hidden></p>
+<button id="exportShare" class="primary" type="button" hidden>حفظ أو مشاركة الفيديو</button>
+<a id="exportViewer" class="downloadButton" target="_blank" rel="noopener" hidden>فتح الفيديو في نافذة للحفظ</a>
+<details id="exportDiagnosticPanel" class="exportDiagnosticPanel" hidden>
+<summary>سجل التصدير · delivery-2 · بدون صور أو صوت</summary>
+<p>لو لم يظهر الحفظ: افتح السجل وصوّره أو انسخه وأرسله. يوضح هل تكوّن الملف وأين توقف التسليم.</p>
+<p id="exportDiagnosticSummary" dir="ltr"></p>
+<textarea id="exportDiagnosticText" dir="ltr" rows="10" readonly aria-label="سجل مراحل التصدير"></textarea>
+<button id="exportCopyDiagnostics" type="button">نسخ سجل التصدير</button>
+<span id="exportCopyStatus" role="status"></span>
+</details>
 <button id="exportDiagnostics" type="button" hidden>تنزيل تقرير التوافق، بدون صور أو صوت</button>
 <button id="exportCancel" type="button">إلغاء التصدير</button>
 <a id="exportDownload" class="primary downloadButton" hidden download>تنزيل الفيديو</a>
@@ -396,6 +407,7 @@
 </script>
 <script src="live-export.js">
 </script>
+<script src="delivery.js"></script>
 <script src="app.js">
 </script>
 <script src="project.js">
