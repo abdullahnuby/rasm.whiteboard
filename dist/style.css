@@ -80,3 +80,7 @@ a.downloadButton{display:inline-flex;align-items:center;justify-content:center;t
 .exportDeliveryStatus,.exportDiagnosticPanel{width:100%;flex-basis:100%;overflow-wrap:anywhere}.exportDeliveryStatus{padding:12px;background:#f1edff;border-radius:8px;line-height:1.8}.exportDiagnosticPanel summary{cursor:pointer;font-weight:700}.exportDiagnosticPanel textarea{display:block;width:100%;box-sizing:border-box;font:12px/1.5 monospace;white-space:pre;resize:vertical;margin:10px 0}#exportViewer{color:var(--purple);background:#f2effa}#exportShare{min-height:48px}
 
 #exportDiagnosticPanel{scroll-margin-top:84px}
+
+.previewAudioPanel{width:100%;min-width:0}.previewAudioPanel label{display:block;font-size:13px;margin:8px 0}.previewAudioPanel audio{display:block;width:100%;max-width:100%}#previewAudioStatus{font-size:13px;margin:8px 0}#previewAudioStatus[data-state=blocked],#previewAudioStatus[data-state=error]{color:#9b243c;font-weight:700}.previewAudioPanel small{color:var(--dim);font-size:11px}
+
+.appUpdateBar{padding:8px 4%;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#f7f5fc;font-size:12px}.appUpdateBar button{font-size:12px;padding:6px 10px}

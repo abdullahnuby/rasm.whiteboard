@@ -24,6 +24,7 @@
 <button id="projectMenu" aria-haspopup="dialog">إدارة المشروع</button>
 <button id="export" class="primary">تصدير الفيديو</button>
 </header>
+<div class="appUpdateBar"><button id="appUpdate" type="button">التحقق من تحديث التطبيق</button><span id="appUpdateStatus" role="status"></span></div>
 <main>
 <section class="intro">
 <div>
@@ -166,6 +167,12 @@
 </div>
 <button id="audioPick">إضافة تسجيل</button>
 <button id="audioClear" hidden>إزالة الصوت</button>
+<div id="previewAudioPanel" class="previewAudioPanel" hidden>
+<label for="previewAudio">مشغل التسجيل · سماع الصوت أثناء ترتيب الصور</label>
+<audio id="previewAudio" controls preload="auto" playsinline aria-label="سماع التسجيل الصوتي"></audio>
+<p id="previewAudioStatus" role="status" aria-live="polite">أضف تسجيلًا لسماعه مع الصور.</p>
+<small>معاينة الصوت 2 · إذا لم تسمع، ارفع صوت الوسائط وتأكد من مخرج السماعة أو البلوتوث.</small>
+</div>
 <div class="audioAdvice">
 <span id="audioMatch">
 </span>

@@ -8,11 +8,6 @@ const server=startServer(3112);let browser;
 try{
  browser=await chromium.launch({executablePath:process.env.CHROME_BIN||'/usr/bin/google-chrome',headless:true,args:['--no-sandbox','--autoplay-policy=document-user-activation-required']});
  const page=await browser.newPage({viewport:{width:430,height:932},deviceScaleFactor:1});const errors=[];page.on('pageerror',error=>errors.push(error.message));
- await page.addInitScript(()=>{
-  // Observe the real speaker graph in addition to its usual destination, without replacing it.
-  const original=AudioContext.prototype.createBufferSource;
-  AudioContext.prototype.createBufferSource=function(){const node=original.call(this),connect=node.connect.bind(node);node.connect=function(target,...rest){const result=connect(target,...rest);if(target===this.context.destination){window.previewTap||=(this.context.createMediaStreamDestination());connect(window.previewTap);window.previewMeter||=(this.context.createAnalyser());connect(window.previewMeter)}return result};return node};
- });
  await page.goto('http://localhost:3112');await page.waitForFunction(()=>typeof restoring!=='undefined'&&!restoring);
  const imageFixtures=await page.evaluate(()=>[0,1].map(i=>{const canvas=document.createElement('canvas');canvas.width=480;canvas.height=270;const c=canvas.getContext('2d');c.fillStyle='white';c.fillRect(0,0,480,270);c.fillStyle=i?'#35bfae':'#ffca38';c.fillRect(70,80,150,140);c.strokeStyle='black';c.lineWidth=6;c.strokeRect(70,80,150,140);c.beginPath();c.arc(340,150,70,0,Math.PI*2);c.moveTo(270,80);c.lineTo(410,220);c.stroke();return canvas.toDataURL().split(',')[1]}));
  await page.locator('#files').setInputFiles(imageFixtures.map((data,i)=>({name:'scene-'+i+'.png',mimeType:'image/png',buffer:Buffer.from(data,'base64')})));await page.waitForFunction(()=>!loading&&scenes.length===2,{timeout:60000});
@@ -20,9 +15,10 @@ try{
  const samples=8*44100,wav=Buffer.alloc(44+samples*2);wav.write('RIFF');wav.writeUInt32LE(wav.length-8,4);wav.write('WAVEfmt ',8);wav.writeUInt32LE(16,16);wav.writeUInt16LE(1,20);wav.writeUInt16LE(1,22);wav.writeUInt32LE(44100,24);wav.writeUInt32LE(88200,28);wav.writeUInt16LE(2,32);wav.writeUInt16LE(16,34);wav.write('data',36);wav.writeUInt32LE(samples*2,40);for(let i=0;i<samples;i++)wav.writeInt16LE(Math.round(8191*Math.sin(2*Math.PI*(440+220*Math.floor(i/88200))*i/44100)),44+i*2);
  await page.locator('#soundFile').setInputFiles({name:'test-narration.wav',mimeType:'audio/wav',buffer:wav});await page.waitForFunction(()=>!loading&&soundBuffer?.duration>7.9);
  await page.locator('#play').click();await page.waitForFunction(()=>running&&time>.15);
- const first=await page.evaluate(()=>{const samples=new Float32Array(previewMeter.fftSize);previewMeter.getFloatTimeDomainData(samples);return {running,time,context:audioContext.state,rms:Math.sqrt(samples.reduce((s,x)=>s+x*x,0)/samples.length),max:+range.max,images:total()}});
+ await page.evaluate(async()=>{window.previewTap=previewMedia.captureStream();window.testAudioContext=new AudioContext();await testAudioContext.resume();window.previewMeter=testAudioContext.createAnalyser();testAudioContext.createMediaStreamSource(previewTap).connect(previewMeter)});await page.waitForTimeout(120);
+ const first=await page.evaluate(()=>{const samples=new Float32Array(previewMeter.fftSize);previewMeter.getFloatTimeDomainData(samples);return {running,time,context:previewMedia.paused?'paused':'playing',rms:Math.sqrt(samples.reduce((s,x)=>s+x*x,0)/samples.length),max:+range.max,images:total()}});
  assert.ok(first.rms>.01,'The preview speaker graph must contain non-silent samples');assert.equal(first.max,8);
- await page.evaluate(()=>{window.previewRecording=[];window.previewCapture=board.captureStream(24);for(const track of previewTap.stream.getAudioTracks())previewCapture.addTrack(track);window.previewRecorder=new MediaRecorder(previewCapture,{mimeType:'video/webm;codecs=vp8,opus'});previewRecorder.ondataavailable=e=>previewRecording.push(e.data);previewRecorder.start()});
+ await page.evaluate(()=>{window.previewRecording=[];window.previewCapture=board.captureStream(24);for(const track of previewTap.getAudioTracks())previewCapture.addTrack(track);window.previewRecorder=new MediaRecorder(previewCapture,{mimeType:'video/webm;codecs=vp8,opus'});previewRecorder.ondataavailable=e=>previewRecording.push(e.data);previewRecorder.start()});
  await page.waitForFunction(()=>time>2.3);assert.equal(await page.evaluate(()=>running),true,'Narration must keep playing beyond the last image');
  // Click the actual waveform at 4.25 seconds while playing.
  await page.locator('#timelineAudioTrack').scrollIntoViewIfNeeded();await page.evaluate(()=>{el('timelineScroll').scrollLeft=0});
@@ -40,7 +36,14 @@ try{
  const resume=await page.evaluate(()=>({time,audio:soundPosition(0)}));assert.ok(Math.abs(resume.time-resume.audio)<.15);
  await page.waitForFunction(()=>!running&&time>=8,{timeout:10000});
  await page.locator('#play').click();await page.waitForFunction(()=>running&&time<1);await page.locator('#play').click();
+ // Visible native controls start the synchronized picture preview too.
+ await page.evaluate(()=>{time=0;previewMedia.currentTime=0;previewMedia.play()});await page.waitForFunction(()=>running&&time>.2);await page.locator('#play').click();
  // Audio-only projects remain usable for laying out images against narration.
  await page.evaluate(()=>{scenes=[];time=0;refresh()});assert.equal(await page.locator('#play').isEnabled(),true);await page.locator('#play').click();await page.waitForFunction(()=>running&&time>.2);await page.locator('#play').click();
- assert.deepEqual(errors,[]);const report={first,seek,resume,paused,audioOnly:true,pageErrors:errors,scope:'Chromium preview speaker-graph capture, not physical iPhone speaker verification'};await writeFile(evidence+'/results.json',JSON.stringify(report,null,2));console.log(report);
+ // Reload a saved project: native source must be rehydrated from the original Blob.
+ await page.evaluate(async()=>{queueSave();await save(saveRevision)});await page.reload();await page.waitForFunction(()=>!restoring&&!!soundBuffer);await page.locator('#play').click();await page.waitForFunction(()=>running&&previewMedia.currentTime>.1);assert.ok(await page.evaluate(()=>previewMedia.src.startsWith('blob:')));await page.locator('#play').click();
+ assert.deepEqual(errors,[]);// A rejected native play must not leave pictures silently running.
+ await page.evaluate(()=>{window.originalMediaPlay=previewMedia.play.bind(previewMedia);previewMedia.play=()=>Promise.reject(new DOMException('blocked','NotAllowedError'))});
+ await page.locator('#play').click();await page.waitForFunction(()=>el('previewAudioStatus').dataset.state==='blocked');assert.equal(await page.evaluate(()=>running),false);await page.evaluate(()=>previewMedia.play=originalMediaPlay);
+ const report={first,seek,resume,paused,audioOnly:true,pageErrors:errors,scope:'Chromium native media capture, not physical iPhone speaker verification'};await writeFile(evidence+'/results.json',JSON.stringify(report,null,2));console.log(report);
 }finally{await browser?.close();server.close()}

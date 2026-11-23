@@ -109,7 +109,7 @@ function render(t){
 
 function stop(){previewRequest++;if(typeof stopSound==='function')stopSound();running=false;cancelAnimationFrame(frame);el('play').textContent='▶︎'}
 function run(end){
- stop();if(typeof startSound==='function')startSound(time);running=true;start=performance.now()-time*1000;el('play').textContent='Ⅱ';
+ cancelAnimationFrame(frame);if(typeof startSound==='function')startSound(time);running=true;start=performance.now()-time*1000;el('play').textContent='Ⅱ';
  let lastPaint=-Infinity;const frameInterval=1000/(recording?24:30);
  function tick(now){
   try{
@@ -363,7 +363,7 @@ async function importFiles(items){
 files.onchange=async()=>{const items=[...files.files];files.value='';await importMedia(items)};document.ondragover=e=>e.preventDefault();document.ondrop=e=>{e.preventDefault();importMedia([...e.dataTransfer.files])};
 el('exportDiagnostics').onclick=()=>{
  if(recording)return;
- const report={app:'rasm-mobile-export-fix-1',delivery:exportDelivery.report(),createdAt:new Date().toISOString(),browser:navigator.userAgent,secureContext:window.isSecureContext,
+ const report={app:'rasm-native-preview-audio-2',delivery:exportDelivery.report(),createdAt:new Date().toISOString(),browser:navigator.userAgent,secureContext:window.isSecureContext,
   apis:{videoEncoder:typeof VideoEncoder,audioEncoder:typeof AudioEncoder,mediaRecorder:typeof MediaRecorder,captureStream:typeof board.captureStream,audioContext:typeof AudioContext},
   recorderTypes:Object.fromEntries(RasmExport.MIME_CANDIDATES.map(type=>{let supported=false;try{supported=typeof MediaRecorder==='function'&&MediaRecorder.isTypeSupported(type)}catch{}return[type,supported]})),
   attempt:lastExportAttempt};

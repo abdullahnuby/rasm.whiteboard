@@ -22,6 +22,7 @@ self.addEventListener('fetch',event=>{
  event.respondWith((async()=>{const cache=await caches.open(cacheName),cached=await cache.match(request);if(cached)return cached;const response=await fetch(request);if(response.ok&&response.type==='basic')await cache.put(request,response.clone());return response})());
 });
 self.addEventListener('message',event=>{
+ if(event.data?.type==='APPLY_SAVED_UPDATE'){event.waitUntil(self.skipWaiting());return}
  if(event.data?.type==='OFFLINE_STATUS'){
   event.waitUntil((async()=>{
    const cache=await caches.open(CORE);

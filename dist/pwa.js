@@ -4,7 +4,9 @@
  const iosHelp=document.getElementById('iosInstallHelp'),storageButton=document.getElementById('protectStorage'),storageState=document.getElementById('storageState');
  const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent||'')||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
  const standalone=()=>navigator.standalone===true||window.matchMedia?.('(display-mode: standalone)').matches===true;
- let installPrompt=null,registration=null,lastStatusCheck=0;
+ let installPrompt=null,registration=null,lastStatusCheck=0,applyingUpdate=false;
+ const updateButton=document.getElementById('appUpdate'),updateStatus=document.getElementById('appUpdateStatus');
+ const updateSay=text=>{if(updateStatus)updateStatus.textContent=text};
  const say=text=>{if(status)status.textContent=text};
  function updateInstallUI(){
   if(iosHelp)iosHelp.hidden=!isIOS||standalone();
@@ -30,7 +32,7 @@
  }
  function waitingUpdate(){
   if(!registration?.waiting)return false;
-  say('تحديث جاهز. سيُطبّق بعد إغلاق كل نوافذ التطبيق وفتحه من جديد، دون إعادة تحميل مشروعك الآن.');return true;
+  say('تحديث جاهز. اضغط تطبيق التحديث لحفظ مشروعك وتشغيل النسخة الجديدة. لن نعيد التحميل تلقائيًا أثناء عملك.');if(updateButton)updateButton.textContent='حفظ المشروع وتطبيق التحديث';return true;
  }
  async function refreshOfflineState(){
   if(!registration?.active||waitingUpdate())return;
@@ -41,13 +43,28 @@
  }
  const registered=('serviceWorker' in navigator&&window.isSecureContext)?navigator.serviceWorker.register('service-worker.js',{updateViaCache:'none'}).then(async value=>{
   registration=value;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(applyingUpdate)window.location.reload()});
   registration.addEventListener('updatefound',()=>registration.installing?.addEventListener('statechange',()=>{waitingUpdate()}));
   waitingUpdate();await navigator.serviceWorker.ready;await refreshOfflineState();return registration;
  }).catch(()=>{say('لم يكتمل تجهيز العمل دون إنترنت. افتح التطبيق مع الاتصال ثم حاول مجددًا. مشاريعك المحفوظة لم تُحذف.');return null}):Promise.resolve(null);
  if(!('serviceWorker' in navigator)||!window.isSecureContext)say('العمل دون إنترنت يحتاج فتح التطبيق عبر HTTPS أو localhost. استخدام المتصفح لا يتطلب تثبيتًا.');
+ if(updateButton)updateButton.onclick=async()=>{
+  updateButton.disabled=true;
+  try{
+   await registered;const ready=await navigator.serviceWorker.getRegistration();if(!ready)throw Error('التحديث غير متاح الآن. افتح التطبيق مع الاتصال بالإنترنت.');
+   if(!ready.waiting&&!ready.installing)await ready.update();
+   if(ready.installing)await new Promise(resolve=>{const worker=ready.installing;const timer=setTimeout(resolve,15000);worker.addEventListener('statechange',()=>{if(worker.state==='installed'||worker.state==='redundant'){clearTimeout(timer);resolve()}})});
+   if(!ready.waiting){updateSay('جارٍ التحقق. إذا ظهر تحديث جاهز اضغط الزر لتطبيقه.');return}
+   if(!window.RasmPrepareUpdate)throw Error('انتظر تجهيز المحرر ثم حاول مرة أخرى.');
+   updateSay('جارٍ حفظ المشروع قبل التحديث…');await window.RasmPrepareUpdate();
+   applyingUpdate=true;ready.waiting.postMessage({type:'APPLY_SAVED_UPDATE'});updateSay('تم الحفظ. جارٍ تشغيل النسخة الجديدة…');
+  }catch(error){applyingUpdate=false;updateSay(String(error.message||error))}
+  finally{updateButton.disabled=false}
+ };
+ async function checkForUpdate(){if(registration&&!registration.waiting&&!registration.installing)try{await registration.update();waitingUpdate()}catch{}}
  // Resuming a suspended web app rechecks local cache state without reloading the editor.
- document.addEventListener?.('visibilitychange',()=>{if(document.visibilityState==='visible'&&Date.now()-lastStatusCheck>30000)void refreshOfflineState()});
- window.addEventListener('online',()=>{void refreshOfflineState()});
+ document.addEventListener?.('visibilitychange',()=>{if(document.visibilityState==='visible'&&Date.now()-lastStatusCheck>30000){void refreshOfflineState();void checkForUpdate()}});
+ window.addEventListener('online',()=>{void refreshOfflineState();void checkForUpdate()});
  if(storageButton){
   storageButton.hidden=typeof navigator.storage?.persist!=='function';
   storageButton.onclick=async()=>{

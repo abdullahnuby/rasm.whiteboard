@@ -14,29 +14,36 @@ const within=(v,min,max,fallback)=>Number.isFinite(v)?Math.min(max,Math.max(min,
 const choose=(v,list,fallback)=>list.includes(v)?v:fallback;
 const asData=file=>new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=()=>no(r.error);r.readAsDataURL(file)});
 function audioEngine(){return audioContext??=new (window.AudioContext||window.webkitAudioContext)()}
-const previewAudio=RasmPreviewAudio.create({getContext:audioEngine,getBuffer:()=>soundBuffer});
-function readySound(){return previewAudio.ready()}
+const previewMedia=el('previewAudio');
+let previewPreparing=false;
+const previewAudio=RasmPreviewAudio.create({media:previewMedia,onState:({state,message})=>{el('previewAudioStatus').textContent=message;el('previewAudioStatus').dataset.state=state}});
+function readySound(at=time){return previewAudio.ready(at)}
 function stopSound(){previewAudio.stop()}
 function startSound(at){previewAudio.start(at)}
 function soundPosition(fallback){return previewAudio.position(fallback)}
-async function playPreview(){
+async function playPreview(native=false){
  if(loading||recording||(!scenes.length&&!soundBuffer))return;
+ if(previewPreparing)return;previewPreparing=true;
  const token=++previewRequest;
+ if(time>=previewDuration()-.001)time=0;
  const button=el('play');button.disabled=true;button.textContent='…';
  try{
-  await readySound();
+  if(!native)await readySound(time);
   const originals=scenes.filter(scene=>scene.mode==='original');
   for(let index=0;index<originals.length;index++){
    el('msg').textContent='تجهيز خطة العناصر للمشهد '+(index+1)+' من '+originals.length+'…';
    await prepareColorSchedule(originals[index]);
   }
   if(token!==previewRequest)return;
-  if(time>=previewDuration()-.001)time=0;
+  if(soundBuffer&&time<soundBuffer.duration)time=previewMedia.currentTime;
   run();el('msg').textContent=soundBuffer?'تشغيل الصور مع التسجيل الصوتي. اضغط على الموجة لتغيير الموضع.':'تشغيل معاينة الصور.';
- }catch(error){el('msg').textContent='تعذّر تشغيل المعاينة: '+String(error.message||error)}
- finally{button.disabled=!scenes.length&&!soundBuffer;if(!running)button.textContent='▶︎'}
+ }catch(error){stop();el('msg').textContent='تعذّر تشغيل المعاينة: '+String(error.message||error)}
+ finally{previewPreparing=false;button.disabled=!scenes.length&&!soundBuffer;if(!running)button.textContent='▶︎'}
 }
-function showAudio(){if(typeof refreshGuide==='function')refreshGuide();el('audioInfo').textContent=soundAsset?soundAsset.name+' · '+soundBuffer.duration.toFixed(1)+' ث': 'لم يُضف تسجيل بعد';el('audioClear').hidden=!soundAsset;el('audioPick').textContent=soundAsset?'تغيير التسجيل':'إضافة تسجيل';setAudioTimeline(soundBuffer?.duration||0,soundAsset?.name,soundBuffer);time=Math.min(time,previewDuration());el('play').disabled=el('seek').disabled=!scenes.length&&!soundBuffer;render(time)}
+previewMedia.addEventListener('play',()=>{if(!running&&!previewPreparing){time=previewMedia.currentTime;playPreview(true)}});
+previewMedia.addEventListener('pause',()=>{if(running&&!previewMedia.ended)stop()});
+previewMedia.addEventListener('seeked',()=>{if(!previewPreparing){time=previewMedia.currentTime;render(time)}});
+function showAudio(){previewAudio.setAsset(soundAsset);el('previewAudioPanel').hidden=!soundAsset;if(typeof refreshGuide==='function')refreshGuide();el('audioInfo').textContent=soundAsset?soundAsset.name+' · '+soundBuffer.duration.toFixed(1)+' ث': 'لم يُضف تسجيل بعد';el('audioClear').hidden=!soundAsset;el('audioPick').textContent=soundAsset?'تغيير التسجيل':'إضافة تسجيل';setAudioTimeline(soundBuffer?.duration||0,soundAsset?.name,soundBuffer);time=Math.min(time,previewDuration());el('play').disabled=el('seek').disabled=!scenes.length&&!soundBuffer;render(time)}
 el('audioPick').onclick=()=>el('soundFile').click();
 function isAudioFile(file){return file.type.startsWith('audio/')||/\.(mp3|m4a|aac|wav|ogg|flac|opus|weba)$/i.test(file.name)}
 const MAX_AUDIO_BYTES=80*1048576;
@@ -262,3 +269,13 @@ el('projectInput').onchange=async e=>{
  }catch(error){db=null;failForeground(error);el('saveState').textContent='تعذّر استرجاع الحفظ المحلي · الحفظ التلقائي متوقف حتى لا يُمسح شغلك. استخدم ملف المشروع'}
  finally{restoring=false;busy(false)}
 })();
+
+// An explicit update must preserve the project before replacing the app shell.
+window.RasmPrepareUpdate=async()=>{
+ if(recording||loading||previewPreparing)throw Error('انتظر انتهاء العملية الحالية قبل التحديث.');
+ stop();clearTimeout(timer);
+ if(!repository||!db)throw Error('الحفظ المحلي غير متاح. نزّل نسخة .rasm قبل إغلاق التطبيق وتحديثه.');
+ const revision=saveRevision,data=await snapshot(false);
+ await saveQueue(async()=>{if(revision!==saveRevision)throw Error('تغير المشروع أثناء الحفظ. حاول التحديث مرة أخرى.');const saved=await repository.put('current',data,()=>revision===saveRevision);if(!saved)throw Error('لم يتأكد حفظ المشروع. نزّل نسخة .rasm قبل التحديث.')});
+ if(revision!==saveRevision)throw Error('تغير المشروع. حاول مرة أخرى.');
+};
