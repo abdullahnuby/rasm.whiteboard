@@ -7,6 +7,8 @@ function endForeground(){foregroundJob?.finish();foregroundJob=null}
 function failForeground(error){foregroundJob?.fail(error)}
 const surface=(w,h)=>Object.assign(document.createElement('canvas'),{width:w,height:h});
 let scenes=[], selected=0, time=0, running=false, recording=false, start=0, frame=0, tone=0, demo=true, loading=false, lastUrl='', activeImport=null;
+let previewRequest=0;
+const previewDuration=()=>Math.max(total(),audioTimeline?.duration||0);
 let timelineScale=40, audioTimeline=null, timelineDrag=null, exportSession=null, lastExportRevision=null, lastExportAttempt=null;
 const exportDelivery=RasmDelivery.create();
 const defaults={revealMode:'direct',speed:.5,motionStyle:'smart',mode:'original',tone:4,sourceHand:'auto',handSize:100,weight:1.4,side:'1',hold:18,paper:'#ffffff',transition:'cut'};
@@ -90,7 +92,7 @@ function captureProjectRenderer(){
 }
 function render(t){
  const W=board.width,H=board.height;ctx.fillStyle='white';ctx.fillRect(0,0,W,H);
- if(!scenes.length){frameAsset=null;return}
+ if(!scenes.length){frameAsset=null;range.value=t;range.max=previewDuration();el('clock').textContent=formatClock(t)+' / '+formatClock(previewDuration());updateTimelinePlayhead(t);return}
  let i=0,local=t;while(i<scenes.length-1&&local>=sceneSeconds(scenes[i]))local-=sceneSeconds(scenes[i++]);
  const scene=scenes[i];let pixels=null;
  if(scene.mode==='original'){
@@ -101,22 +103,24 @@ function render(t){
  if(metadata&&scene.enginePlanV2&&(scene.mode!=='original'||pixels)){
   RasmEditorCore.renderFrame(compileScenePlan(scene,pixels),local,frameTarget(scene));
  }else{ctx.fillStyle=scene.paper;ctx.fillRect(0,0,W,H)}
- range.value=t;range.max=total();el('clock').textContent=formatClock(t)+' / '+formatClock(total());el('meta').textContent='المشهد '+(i+1)+' من '+scenes.length;
+ range.value=t;range.max=previewDuration();el('clock').textContent=formatClock(t)+' / '+formatClock(previewDuration());el('meta').textContent='المشهد '+(i+1)+' من '+scenes.length;
  if(typeof updateTimelinePlayhead==='function')updateTimelinePlayhead(t)
 }
 
-function stop(){if(typeof stopSound==='function')stopSound();running=false;cancelAnimationFrame(frame);el('play').textContent='▶︎'}
+function stop(){previewRequest++;if(typeof stopSound==='function')stopSound();running=false;cancelAnimationFrame(frame);el('play').textContent='▶︎'}
 function run(end){
  stop();if(typeof startSound==='function')startSound(time);running=true;start=performance.now()-time*1000;el('play').textContent='Ⅱ';
  let lastPaint=-Infinity;const frameInterval=1000/(recording?24:30);
  function tick(now){
   try{
-   time=Math.min(total(),Math.max(0,(now-start)/1000));
-   if(now-lastPaint>=frameInterval||time>=total()){
+   if(typeof previewAudio!=='undefined'&&previewAudio.interrupted()){stop();el('msg').textContent='توقف الصوت بسبب مقاطعة من الجهاز. اضغط التشغيل للمتابعة من نفس الموضع.';return}
+   const elapsed=Math.max(0,(now-start)/1000);
+   time=Math.min(previewDuration(),typeof soundPosition==='function'?soundPosition(elapsed):elapsed);
+   if(now-lastPaint>=frameInterval||time>=previewDuration()){
     lastPaint=now;render(time);
     if(exportSession&&!exportSession.cancelled){const pct=Math.min(100,total()?time/total()*100:100);el('exportProgress').value=pct;el('exportPercent').textContent=Math.floor(pct)+'%';el('exportElapsed').textContent=time.toFixed(1)+' / '+total().toFixed(1)+' ثانية'}
    }
-   if(time>=total()){stop();if(end)end()}else frame=requestAnimationFrame(tick)
+   if(time>=previewDuration()){stop();if(end)end()}else frame=requestAnimationFrame(tick)
   }catch(error){
    const reason=String(error?.message||error||'unknown rendering error');
    stop();
@@ -129,7 +133,7 @@ function run(end){
 
 function updateTimelinePlayhead(t){
  const playhead=el('timelinePlayhead');if(playhead)playhead.style.left=(Math.max(0,t)*timelineScale)+'px';
- const totalLabel=el('timelineTotal');if(totalLabel)totalLabel.textContent=RasmTimeline.formatTime(total());
+ const totalLabel=el('timelineTotal');if(totalLabel)totalLabel.textContent=RasmTimeline.formatTime(previewDuration());
 }
 function setAudioTimeline(duration,name,buffer){
  audioTimeline=duration>0?{duration,name:String(name||'التعليق الصوتي'),buffer}:null;renderTimeline();
@@ -147,7 +151,7 @@ function syncTimelineGeometry(){
  content.style.width=width+'px';el('timelineRuler').style.width=width+'px';el('timelineVideoTrack').style.width=width+'px';el('timelineAudioTrack').style.width=width+'px';
  layout.forEach(item=>{const clip=el('timelineVideoTrack').querySelector('[data-index="'+item.index+'"]');if(!clip)return;clip.style.left=(item.start*timelineScale)+'px';clip.style.width=(item.duration*timelineScale)+'px';const duration=clip.querySelector('.timelineClipDuration');if(duration)duration.textContent=item.duration.toFixed(1)+' ث'});
  if(typeof renderElementTimeline==='function')renderElementTimeline();
- time=Math.min(time,total());range.max=total();updateTimelinePlayhead(time);
+ time=Math.min(time,previewDuration());range.max=previewDuration();updateTimelinePlayhead(time);
 }
 function renderTimeline(){
  const scroll=el('timelineScroll'),content=el('timelineContent');if(!scroll||!content)return;
@@ -167,7 +171,7 @@ function renderTimeline(){
   const duration=document.createElement('small');duration.className='timelineClipDuration';duration.textContent=item.duration.toFixed(1)+' ث';copy.append(name,duration);
   const grip=document.createElement('span');grip.className='timelineResize';grip.setAttribute('role','separator');grip.setAttribute('aria-label','اسحب لتعديل مدة المشهد');grip.title='اسحب لتغيير مدة المشهد';
   grip.addEventListener('pointerdown',event=>beginTimelineResize(item.index,event));grip.addEventListener('click',event=>{event.preventDefault();event.stopPropagation()});
-  clip.append(thumb,copy,grip);clip.addEventListener('click',()=>pick(item.index));video.append(clip);
+  clip.append(thumb,copy,grip);clip.addEventListener('click',event=>{const x=event.clientX-el('timelineContent').getBoundingClientRect().left;selected=item.index;refresh();seekPreview(x/timelineScale)});video.append(clip);
  }
  if(audioTimeline){
   audio.hidden=false;const audioClip=document.createElement('div');audioClip.className='timelineAudioClip';audioClip.style.width=(audioTimeline.duration*timelineScale)+'px';
@@ -197,8 +201,9 @@ document.addEventListener('pointerup',finishTimelineResize);document.addEventLis
 el('timelineContent').addEventListener('click',event=>{
  if(event.target.closest('.timelineClip,.timelineResize'))return;
  const content=el('timelineContent'),x=event.clientX-content.getBoundingClientRect().left;
- stop();time=Math.min(total(),Math.max(0,x/timelineScale));render(time);
+ seekPreview(x/timelineScale);
 });
+function seekPreview(seconds){if(recording||loading)return;const resume=running;stop();time=Math.min(previewDuration(),Math.max(0,seconds));render(time);if(resume)return playPreview()}
 el('zoomIn').onclick=()=>{timelineScale=Math.min(80,timelineScale+6);renderTimeline()};
 el('zoomOut').onclick=()=>{timelineScale=Math.max(.5,timelineScale-6);renderTimeline()};
 el('zoomFit').onclick=()=>{const seconds=Math.max(total(),audioTimeline?.duration||0);timelineScale=Math.max(.5,Math.min(80,(el('timelineScroll').clientWidth-50)/Math.max(1,seconds)));renderTimeline()};
@@ -228,7 +233,7 @@ function refreshEngineDiagnostics(scene){
 }
 function refresh(){editorSession.synchronize(scenes,selected,el('titleView').textContent);if(typeof refreshGuide==='function')refreshGuide();const current=scenes[selected]||defaults;el('speed').value=current.speed||1;el('motionStyle').value=current.motionStyle||'smart';el('elementDirection').value=current.elementDirection||'rtl';el('sceneTime').textContent=scenes.length?'مدة المشهد بعد ضبط السرعة: '+sceneSeconds(current).toFixed(1)+' ث':'';el('sourceHand').value=current.sourceHand;el('handSize').value=current.handSize;el('sizeValue').value=current.handSize+'%';el('weight').value=current.weight;el('zoneEdit').disabled=!scenes.length;el('elementEdit').disabled=!scenes.length;el('handState').textContent=current.sourceHand==='present'?'تُستخدم اليد الظاهرة في الصورة.':current.handHint&&current.sourceHand==='auto'?'إذا ظهرت يد في الصورة، اختر «الصورة تتضمّن يدًا».':current.handHint&&current.sourceHand==='detect'?'أُخفيت اليد بناءً على الفحص.':'';el('style').value=current.mode;el('revealMode').value=current.revealMode||'direct';el('revealMode').disabled=current.mode!=='original';el('side').value=current.side;el('paper').value=current.paper;el('hold').value=current.hold;el('holdValue').value=current.hold+'%';el('transition').value=current.transition;el('sceneName').value=current.name||'';document.querySelectorAll('#hands button').forEach((b,i)=>b.classList.toggle('active',Number(b.dataset.tone)===current.tone));range.max=total();el('duration').value=scenes.length?sceneSeconds(scenes[selected]).toFixed(1):'6';el('count').textContent=scenes.length+' مشاهد';el('cards').replaceChildren();scenes.forEach((s,i)=>{const b=document.createElement('button');b.className='card'+(i===selected?' active':'');const img=new Image();img.src=s.thumb;const caption=document.createElement('span');caption.textContent=(i+1)+' · '+s.name;b.append(img,caption);b.onclick=()=>pick(i);el('cards').append(b)});
  el('earlier').disabled=selected<=0;el('later').disabled=selected>=scenes.length-1;for(const id of ['export','play','remove','duration','seek'])el(id).disabled=!scenes.length;
- if(!scenes.length){el('clock').textContent='0:00 / 0:00';el('meta').textContent='';range.value=0}renderTimeline();render(time);refreshEngineDiagnostics(scenes[selected]||null);if(typeof refreshGuide==='function')refreshGuide()}
+ if(!scenes.length){el('clock').textContent='0:00 / 0:00';el('meta').textContent='';range.value=0}el('play').disabled=el('seek').disabled=!scenes.length&&!audioTimeline;renderTimeline();render(time);refreshEngineDiagnostics(scenes[selected]||null);if(typeof refreshGuide==='function')refreshGuide()}
 function setBoardResolution(longEdge){const r=+el('ratio').value;const width=r>=1?longEdge:Math.round(longEdge*r/2)*2;const height=r>=1?Math.round(longEdge/r/2)*2:longEdge;if(board.width!==width||board.height!==height){board.width=width;board.height=height}render(time)}
 function size(){setBoardResolution(Math.min(960,+el('quality').value))}
 function exportSize(){setBoardResolution(+el('quality').value)}
@@ -281,7 +286,7 @@ el('downloadEngineDiagnostics').onclick=async()=>{
   el('engineDiagnosticsText').textContent+='\n\nتعذّر بناء تقرير الجدولة: '+String(error.message||error);
  }
 };
-el('addFiles').onclick=()=>files.click();range.oninput=()=>{stop();time=+range.value;render(time)};
+el('addFiles').onclick=()=>files.click();range.oninput=()=>seekPreview(+range.value);
 for(const [id,label,icon] of [[4,'فوتوغرافية',''],[0,'مرسومة','✍🏻'],[1,'داكنة','✍🏾'],[2,'بدون يد','∅']]){
  const b=document.createElement('button');b.dataset.tone=id;if(id===4){const img=new Image();img.src='assets/marker-hand.webp';img.alt='';b.append(img)}else{const mark=document.createElement('b');mark.textContent=icon;b.append(mark)}b.append(label);b.onclick=()=>{if(!scenes[selected])return;scenes[selected].tone=id;refresh()};el('hands').append(b)
 }

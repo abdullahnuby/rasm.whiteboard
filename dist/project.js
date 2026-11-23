@@ -6,7 +6,7 @@ el('handFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;stop();
 el('useHand').onclick=()=>{if(handImage&&scenes[selected]){scenes[selected].tone=3;refresh();queueSave()}};
 for(const [id,key] of [['tipX','x'],['tipY','y']])el(id).onchange=()=>{handTip[key]=within(+el(id).value,0,100,0);el(id).value=handTip[key];render(time);queueSave()};
 const projectDialog=el('projectDialog');
-let soundBuffer=null,audioContext=null,audioSource=null,recordBus=null,soundAsset=null;
+let soundBuffer=null,audioContext=null,recordBus=null,soundAsset=null;
 let repository=null;
 let restoring=true,timer,db,saveRevision=0,title='مشروع وايت بورد';
 const saveQueue=RasmReliability.createSerialQueue();
@@ -14,10 +14,29 @@ const within=(v,min,max,fallback)=>Number.isFinite(v)?Math.min(max,Math.max(min,
 const choose=(v,list,fallback)=>list.includes(v)?v:fallback;
 const asData=file=>new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=()=>no(r.error);r.readAsDataURL(file)});
 function audioEngine(){return audioContext??=new (window.AudioContext||window.webkitAudioContext)()}
-async function readySound(){if(soundBuffer)await audioEngine().resume()}
-function stopSound(){if(audioSource){try{audioSource.stop()}catch{}audioSource.disconnect();audioSource=null}}
-function startSound(at){if(!soundBuffer||at>=soundBuffer.duration)return;const c=audioEngine();audioSource=c.createBufferSource();audioSource.buffer=soundBuffer;audioSource.connect(c.destination);if(recordBus)audioSource.connect(recordBus);audioSource.start(0,at)}
-function showAudio(){if(typeof refreshGuide==='function')refreshGuide();el('audioInfo').textContent=soundAsset?soundAsset.name+' · '+soundBuffer.duration.toFixed(1)+' ث': 'لم يُضف تسجيل بعد';el('audioClear').hidden=!soundAsset;el('audioPick').textContent=soundAsset?'تغيير التسجيل':'إضافة تسجيل';setAudioTimeline(soundBuffer?.duration||0,soundAsset?.name,soundBuffer)}
+const previewAudio=RasmPreviewAudio.create({getContext:audioEngine,getBuffer:()=>soundBuffer});
+function readySound(){return previewAudio.ready()}
+function stopSound(){previewAudio.stop()}
+function startSound(at){previewAudio.start(at)}
+function soundPosition(fallback){return previewAudio.position(fallback)}
+async function playPreview(){
+ if(loading||recording||(!scenes.length&&!soundBuffer))return;
+ const token=++previewRequest;
+ const button=el('play');button.disabled=true;button.textContent='…';
+ try{
+  await readySound();
+  const originals=scenes.filter(scene=>scene.mode==='original');
+  for(let index=0;index<originals.length;index++){
+   el('msg').textContent='تجهيز خطة العناصر للمشهد '+(index+1)+' من '+originals.length+'…';
+   await prepareColorSchedule(originals[index]);
+  }
+  if(token!==previewRequest)return;
+  if(time>=previewDuration()-.001)time=0;
+  run();el('msg').textContent=soundBuffer?'تشغيل الصور مع التسجيل الصوتي. اضغط على الموجة لتغيير الموضع.':'تشغيل معاينة الصور.';
+ }catch(error){el('msg').textContent='تعذّر تشغيل المعاينة: '+String(error.message||error)}
+ finally{button.disabled=!scenes.length&&!soundBuffer;if(!running)button.textContent='▶︎'}
+}
+function showAudio(){if(typeof refreshGuide==='function')refreshGuide();el('audioInfo').textContent=soundAsset?soundAsset.name+' · '+soundBuffer.duration.toFixed(1)+' ث': 'لم يُضف تسجيل بعد';el('audioClear').hidden=!soundAsset;el('audioPick').textContent=soundAsset?'تغيير التسجيل':'إضافة تسجيل';setAudioTimeline(soundBuffer?.duration||0,soundAsset?.name,soundBuffer);time=Math.min(time,previewDuration());el('play').disabled=el('seek').disabled=!scenes.length&&!soundBuffer;render(time)}
 el('audioPick').onclick=()=>el('soundFile').click();
 function isAudioFile(file){return file.type.startsWith('audio/')||/\.(mp3|m4a|aac|wav|ogg|flac|opus|weba)$/i.test(file.name)}
 const MAX_AUDIO_BYTES=80*1048576;
@@ -41,26 +60,7 @@ async function importMedia(items){
 }
 el('soundFile').onchange=async e=>{const file=e.target.files[0];e.target.value='';await attachRecording(file)};
 el('audioClear').onclick=()=>{stop();soundAsset=soundBuffer=null;showAudio();queueSave()};
-el('play').onclick=async()=>{
- if(running)return stop();
- if(loading||recording||!scenes.length)return;
- const button=el('play');button.disabled=true;button.textContent='…';
- try{
-  await readySound();
-  const originals=scenes.filter(scene=>scene.mode==='original');
-  for(let index=0;index<originals.length;index++){
-   el('msg').textContent='تجهيز خطة العناصر للمشهد '+(index+1)+' من '+originals.length+'…';
-   await prepareColorSchedule(originals[index]);
-  }
-  if(time>=total()-.001)time=0;
-  run();
- }catch(error){
-  el('msg').textContent='تعذّر تجهيز محرك الرسم: '+String(error.message||error);
- }finally{
-  button.disabled=false;
-  if(!running)button.textContent='▶︎';
- }
-};
+el('play').onclick=()=>{if(running)return stop();return playPreview()};
 el('copy').onclick=()=>{if(!scenes.length)return;let clone={...scenes[selected],name:scenes[selected].name+' (نسخة)'};scenes.splice(selected+1,0,clone);pick(selected+1);queueSave()};
 function busy(flag,kind='planning'){if(flag)beginForeground(kind,'جارٍ تنفيذ العملية…');else endForeground();loading=flag;document.querySelector('.workflow').inert=flag;document.querySelector('.grid').inert=flag;document.querySelector('.intro').inert=flag;el('export').disabled=flag||!scenes.length;el('projectMenu').disabled=flag;if(typeof syncDrawer==='function')syncDrawer()}
 function setTitle(value){title=String(value||'مشروع وايت بورد').trim().slice(0,100)||'مشروع وايت بورد';editorSession.setTitle(title);el('titleView').textContent=el('projectName').value=title}

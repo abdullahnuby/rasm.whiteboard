@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 const html = await readFile('dist/index.html', 'utf8');
 const ids = [...html.matchAll(/ id="([^"]+)"/g)].map(match => match[1]);
 assert.equal(new Set(ids).size, ids.length, 'Duplicate HTML IDs');
-for (const file of ['delivery.js', 'editor-core.js', 'app.js', 'project.js', 'zones.js', 'engine-v2.js', 'engine.js', 'engine-worker.js', 'reliability.js', 'timeline.js', 'export.js', 'motion-worker.js','offline-export.js','live-export.js','interface.js']) {
+for (const file of ['preview-audio.js', 'delivery.js', 'editor-core.js', 'app.js', 'project.js', 'zones.js', 'engine-v2.js', 'engine.js', 'engine-worker.js', 'reliability.js', 'timeline.js', 'export.js', 'motion-worker.js','offline-export.js','live-export.js','interface.js']) {
   const js = await readFile('dist/' + file, 'utf8');
   if (file === 'engine-worker.js') {
     assert.ok(js.includes("'engine-v2.js'"), 'Image worker must load the shared Engine v2 core');
@@ -51,3 +51,5 @@ assert.ok(appSource.includes('await applyZones(scene)'), 'Import must await Work
 assert.ok(appSource.includes('تفاصيل أول الأخطاء'), 'Import failures must display actionable causes');
 assert.ok(appSource.includes('توقفت المعاينة بسبب خطأ في محرك الرسم'), 'Playback render failures must be displayed instead of silently stopping');
 assert.ok(projectSource.includes('تعذّر قراءة النسخة:'), 'Project restore must display the underlying engine error');
+
+assert.ok(html.indexOf('preview-audio.js')<html.indexOf('project.js'), 'Preview audio must load before project playback');

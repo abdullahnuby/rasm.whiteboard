@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import vm from 'node:vm';
+const events=[];let currentBuffer={duration:8};let currentSource;
+const context={state:'suspended',currentTime:10,destination:{},resume(){events.push('resume');this.state='running';return Promise.resolve()},createBufferSource(){currentSource={connect(target){events.push(['connect',target])},start(when,offset){events.push(['start',when,offset])},stop(){events.push('stop')},disconnect(){events.push('disconnect')}};return currentSource}};
+const session={set type(value){events.push(['session',value])}};
+const sandbox=vm.createContext({navigator:{audioSession:session},Promise,Error,Object,setTimeout,clearTimeout});
+vm.runInContext(await readFile('dist/preview-audio.js','utf8'),sandbox);
+const preview=sandbox.RasmPreviewAudio.create({getContext:()=>context,getBuffer:()=>currentBuffer});
+const ready=preview.ready();assert.deepEqual(events.slice(0,2),[['session','playback'],'resume'],'Declare playback and resume in the user gesture, before waiting');await ready;
+preview.start(2.25);assert.deepEqual(events.at(-1),['start',0,2.25]);assert.deepEqual(events.at(-2),['connect',context.destination]);context.currentTime=10.5;assert.equal(preview.position(999),2.75,'Use the audio clock, not render timing');
+context.state='interrupted';assert.equal(preview.interrupted(),true);preview.stop();assert.equal(preview.interrupted(),false);assert.equal(preview.position(3),3);
+context.state='running';preview.start(8.1);context.currentTime=11;assert.equal(preview.position(0),8.6,'Keep the clock working after short narration ends');preview.stop();
+currentBuffer=null;events.length=0;await preview.ready();preview.start(0);assert.equal(events.length,0);
+const unsupported=vm.createContext({navigator:{},Promise,Error,Object,setTimeout,clearTimeout});vm.runInContext(await readFile('dist/preview-audio.js','utf8'),unsupported);
+currentBuffer={duration:2};await unsupported.RasmPreviewAudio.create({getContext:()=>context,getBuffer:()=>currentBuffer}).ready();
+const refused={...context,resume(){return Promise.reject(Error('blocked'))}};await assert.rejects(sandbox.RasmPreviewAudio.create({getContext:()=>refused,getBuffer:()=>currentBuffer}).ready(),/blocked/);
+console.log('Preview audio: playback intent, activation, audible destination, seek offset, audio clock, interruption, cleanup and API fallback passed.');
