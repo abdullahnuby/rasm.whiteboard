@@ -130,3 +130,117 @@ a.downloadButton{display:inline-flex;align-items:center;justify-content:center;t
  summary{padding-block:11px}
  .timelineClip{min-height:64px}
 }
+
+/* ===== Simple main screen ===== */
+.workflow,.quickBar,.appUpdateBar,#editSceneMobile,#storyOpenPlaceholder{display:none!important}
+.grid{grid-template-columns:1fr!important;max-width:900px;margin-inline:auto}
+main{padding-bottom:96px}
+#simpleBar{position:fixed;inset-inline:0;bottom:0;z-index:30;display:grid;grid-template-columns:repeat(5,1fr);gap:2px;background:#fff;border-top:1px solid #ded7e9;padding:6px max(6px,env(safe-area-inset-left)) max(6px,env(safe-area-inset-bottom));box-shadow:0 -4px 16px #2a1f5a1a}
+#simpleBar button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:52px;padding:4px 2px;border:0;border-radius:12px;background:transparent;color:#3a3150;font-size:12px}
+#simpleBar button span{font-size:20px;line-height:1}
+#simpleBar button b{font-weight:600}
+#simpleBar button[aria-pressed=true]{background:#ece6fb;color:#3c276f}
+#simplePop{position:fixed;inset-inline:0;bottom:calc(64px + env(safe-area-inset-bottom));z-index:29;margin-inline:auto;width:min(620px,100%);max-height:52dvh;display:flex;flex-direction:column;background:#fff;border:1px solid #ded7e9;border-radius:18px 18px 0 0;box-shadow:0 -8px 28px #2a1f5a2e}
+#simplePop[hidden]{display:none}
+#simplePop .popHead{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid #eee9f6}
+#simplePop .popHead button{min-height:44px;min-width:44px;border:0;background:#f3f0fa;border-radius:10px;font-size:13px}
+#simplePop .popBody{overflow:auto;padding:12px 14px 16px;-webkit-overflow-scrolling:touch}
+#simplePop .popRow{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px}
+#simplePop .popRow>label{flex:1 1 180px;display:flex;flex-direction:column;gap:4px}
+#simplePop .popRow button,#simplePop select,#simplePop input[type=number]{min-height:44px}
+#simplePop input[type=range]{height:32px;width:100%}
+#simplePop aside{position:static!important;max-height:none!important;overflow:visible!important;padding:0;border:0;box-shadow:none;background:transparent}
+#simplePop .timelinePanel{padding:0;border:0;box-shadow:none}
+#simplePop .edit{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+#simplePop .edit button{min-height:44px}
+@media(max-width:560px){#simplePop{max-height:56dvh}#simpleBar button b{font-size:11px}}
+#simplePop #projectMenu,#simplePop #storyOpen{color:#282337;background:#fff;border:1px solid #cfc7e3}
+#simplePop #appUpdate{min-height:44px}
+@media(max-width:560px){
+ .intro>div:first-child>small,.panelhead h2,#meta{display:none}
+ .intro{margin-bottom:8px}
+ html.popOpen .stage{height:190px}
+ html.popOpen #simplePop{max-height:42dvh}
+}
+@media(min-width:901px){
+ .intro>div:first-child>small{display:none}
+ .stage{height:clamp(240px,calc(100dvh - 430px),440px)}
+ #simplePop{inset-inline-end:16px;inset-inline-start:auto;margin-inline:0;width:380px;max-height:calc(100dvh - 180px);bottom:84px;border-radius:18px}
+}
+@media(min-width:901px){.grid{max-width:760px}#simplePop{width:285px}}
+
+.intro .actions{display:none}
+.timelinePanel,.audioLane{margin-top:0}
+.timelineToolbar small{display:none}
+.timelineToolbar h2{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.timelineToolbar{display:none}
+
+/* ===== Polish: light, calm, confident ===== */
+:root{--purple:#6a47d6;--grad:linear-gradient(135deg,#7b5be6,#5a3bc4)}
+body{background:radial-gradient(1200px 500px at 80% -10%,#ece6ff 0,transparent 60%),#f6f5fb}
+header{background:rgba(255,255,255,.92);backdrop-filter:blur(10px);color:var(--ink);border-bottom:1px solid #e6e2f3;position:sticky;top:0;z-index:20}
+header>span,.divider{color:var(--dim)}.divider{background:#e1dcf0}
+.logo{color:#2b2250}.logo i{background:var(--grad);color:#fff}
+header .primary,#export{background:var(--grad);color:#fff;border:0;box-shadow:0 6px 16px #6a47d640;border-radius:12px;padding:9px 16px}
+header .primary:hover:enabled{background:var(--grad);filter:brightness(1.07)}
+#mobileMenu{background:#f3f0fb;color:#3a2f66;border-color:#e1dcf0}
+.studio{border-radius:22px;box-shadow:0 14px 40px #3a2f6612;border-color:#ebe7f6}
+.stage{background-color:#f0eefa;background-image:radial-gradient(#d9d3ee 1px,transparent 1.2px);background-size:18px 18px}
+#board{box-shadow:0 10px 30px #2a1f5a26;border-radius:6px}
+.transport #play{width:48px;height:48px;border-radius:50%;background:var(--grad);color:#fff;border:0;box-shadow:0 6px 14px #6a47d64d;font-size:18px}
+.transport #play:hover:enabled{background:var(--grad);filter:brightness(1.08)}
+.startGuide{border-radius:22px;background:linear-gradient(135deg,#fff 0,#f4efff 100%);border-color:#e6def8;box-shadow:0 14px 40px #3a2f6612}
+.startGuide h2{font-size:clamp(22px,5vw,30px);color:#2b2250}
+.welcomeSteps{display:flex;gap:10px;list-style:none;padding:0;margin:14px 0 0;flex-wrap:wrap}
+.welcomeSteps li{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e6def8;border-radius:999px;padding:5px 14px 5px 6px;font-size:13px}
+.welcomeSteps b{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--grad);color:#fff;font-size:12px}
+#startImport{background:var(--grad);padding:12px 22px;font-size:16px;border-radius:14px;box-shadow:0 8px 20px #6a47d640}
+#smartStrip{display:flex;gap:8px;flex-wrap:wrap;padding:10px 14px;border-top:1px solid #f0edf8}
+#smartStrip .chip{font:600 13px/1 Rasm,Tahoma,sans-serif;border-radius:999px;padding:9px 13px;background:#f3f0fb;color:#3a2f66;border:1px solid #e6e0f5;min-height:36px;display:inline-flex;align-items:center}
+#smartStrip .chip.ok{background:#e9f7ef;color:#1e6b43;border-color:#cdebd9}
+#smartStrip .chip.warn{background:#fff3e0;color:#8a4b00;border-color:#f4d9ae}
+#smartStrip .chip.hint{background:#fff;border-style:dashed}
+#smartStrip button.chip{cursor:pointer;min-height:44px}
+#simpleBar{inset-inline:10px;bottom:calc(10px + env(safe-area-inset-bottom));border:1px solid #e6e2f3;border-radius:22px;background:rgba(255,255,255,.94);backdrop-filter:blur(12px);box-shadow:0 12px 34px #2a1f5a30;padding:6px}
+#simpleBar button{border-radius:16px;transition:background .15s,color .15s,transform .15s;color:#5b5478}
+#simpleBar button:active{transform:scale(.94)}
+#simpleBar button span{display:grid;place-items:center}
+#simpleBar svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#simpleBar button[aria-pressed=true]{background:var(--grad);color:#fff;box-shadow:0 6px 14px #6a47d640}
+#simplePop{bottom:calc(86px + env(safe-area-inset-bottom));border-radius:22px;inset-inline:10px;width:auto;max-width:640px;border-color:#e6e2f3;box-shadow:0 18px 50px #2a1f5a38}
+@media(prefers-reduced-motion:no-preference){#simplePop:not([hidden]){animation:popUp .2s ease-out}@keyframes popUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}}
+main{padding-bottom:110px}
+@media(min-width:901px){#simpleBar{inset-inline:auto;left:50%;transform:translateX(-50%);width:min(640px,calc(100% - 32px))}#simplePop{inset-inline-end:16px;inset-inline-start:auto;width:285px;bottom:96px}}
+header .menuButton,header .menuButton:hover:enabled{background:#f3f0fb;color:#3a2f66;border-color:#e1dcf0}#projectMenu{color:var(--ink);border-color:#d6d5e4}
+/* slim header */
+header{min-height:48px;padding:6px 3%;gap:10px}
+header .logo strong,header .divider,header>span:not(#hdrTitle){display:none}
+header .logo i{width:32px;height:32px;border-radius:10px;font-size:16px}
+#hdrTitle{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700;font-size:15px;color:var(--ink)}
+header .primary,#export{padding:7px 14px;font-size:14px;border-radius:10px;min-height:38px}
+#mobileMenu{width:38px;height:38px;font-size:20px}
+.intro{display:none}
+main{padding-top:12px}
+@media(max-width:560px){header{padding:6px 3%;min-height:48px}header button{font-size:13px}}
+#smartStrip{display:none!important}
+/* one-line welcome */
+.startGuide{padding:8px 12px!important;margin-bottom:10px!important;flex-direction:row!important;align-items:center!important;gap:8px!important;border-radius:14px!important;box-shadow:none!important}
+.startGuide p,.startGuide .welcomeSteps{display:none!important}
+.startGuide>div:first-child{flex:1;min-width:0}
+.startGuide h2{font-size:14px!important;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.startGuide .actions{display:flex;gap:6px;flex:none}
+.startGuide .actions button{padding:6px 10px!important;font-size:13px!important;white-space:nowrap}
+.startGuide>div:first-child{display:none!important}.startGuide .actions{flex:1}.startGuide .actions button{flex:1}
+#startGuide{display:none!important}
+#msg.blank{display:none!important}
+.panelhead:has(#sceneSelect:empty){display:none!important}
+/* compact timeline */
+.timelinePanel{padding:6px 12px!important}
+.timelineContent{min-height:0!important}
+.timelineRuler{height:18px!important;font-size:11px}
+.timelineVideoTrack{height:50px!important;margin-top:4px!important}
+.timelineClip{height:48px!important;min-height:0!important;padding:3px 10px 3px 3px!important}
+.timelineClipThumb{width:36px!important;height:40px!important;flex-basis:36px!important}
+.timelinePlayhead:before{top:12px!important}
+.timelineScroll{padding-bottom:2px!important}
+.timelineClipCopy strong,.timelineClipCopy small{font-size:11px!important;line-height:1.25}
