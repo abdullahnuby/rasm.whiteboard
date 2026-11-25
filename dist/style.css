@@ -84,3 +84,49 @@ a.downloadButton{display:inline-flex;align-items:center;justify-content:center;t
 .previewAudioPanel{width:100%;min-width:0}.previewAudioPanel label{display:block;font-size:13px;margin:8px 0}.previewAudioPanel audio{display:block;width:100%;max-width:100%}#previewAudioStatus{font-size:13px;margin:8px 0}#previewAudioStatus[data-state=blocked],#previewAudioStatus[data-state=error]{color:#9b243c;font-weight:700}.previewAudioPanel small{color:var(--dim);font-size:11px}
 
 .appUpdateBar{padding:8px 4%;display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#f7f5fc;font-size:12px}.appUpdateBar button{font-size:12px;padding:6px 10px}
+
+.quickBar{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:end;padding:8px 12px;border-top:1px solid #e3e1ee;background:#faf9fe;font-size:13px}
+.quickBar label{display:flex;flex-direction:column;gap:3px;min-width:84px}
+.quickBar select,.quickBar input[type=number]{padding:5px 6px;font:inherit}
+.quickBar button{padding:6px 10px;font:inherit}
+.quickBar input[type=range]{width:96px}
+
+.scenePicker{display:flex;gap:6px;align-items:center;flex:1 1 220px;min-width:0}
+.scenePicker select{flex:1;min-width:0;padding:7px 8px;font:inherit}
+.scenePicker button{padding:7px 12px;font:inherit;font-size:18px;line-height:1}
+.panelhead{flex-wrap:wrap;gap:8px}
+@media(max-width:560px){
+ .appUpdateBar{padding:0 3%;margin:0;min-height:0;font-size:12px}
+ .appUpdateBar button{font-size:12px;padding:3px 8px;border:0;background:transparent;color:#5b4bb5;text-decoration:underline}
+ .intro{flex-direction:column;align-items:stretch;gap:10px}
+ .intro>div:first-child{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px}
+ .intro small{flex-basis:100%}
+ .intro h1{margin:0;font-size:22px}
+ .intro #saveState{font-size:12px;white-space:nowrap}
+ .intro .actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+ .intro .actions button{font-size:13px;padding:9px 6px;white-space:normal}
+ header{position:sticky;top:0;z-index:20}
+ .scenePicker{flex-basis:100%;order:3}
+ #meta{order:2}
+}
+@media(max-width:560px){
+ .quickBar{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px;align-items:end}
+ .quickBar label{min-width:0}
+ .quickBar select,.quickBar input[type=number]{width:100%;box-sizing:border-box;min-height:40px}
+ .quickBar input[type=range]{width:100%}
+ #qSpeedAll{grid-column:1/-1;order:-1;justify-self:start;min-height:36px}
+}
+.elementQuick{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:end;margin:10px 0;padding:10px 12px;background:#f1edfb;border:1px solid #d9cff3;border-radius:12px}
+.elementQuick label{display:flex;flex-direction:column;gap:3px;font-size:12px}
+.elementQuick select{padding:6px;font:inherit;max-width:100%}
+.elementQuick .elementNote{flex-basis:100%;margin:0}
+@media(max-width:560px){.elementQuick{flex-direction:column;align-items:stretch}.elementQuick button,.elementQuick select{min-height:44px;width:100%}}
+#elementCanvas{width:auto;max-width:100%;max-height:50vh;margin:0 auto}
+@media(max-width:560px){
+ header button,#editSceneMobile,.scenePicker button,#qSpeedAll,#play,.timelineTools button,.edit button,#downloadEngineDiagnostics,#appUpdate{min-height:44px;min-width:44px}
+ #appUpdate{min-height:32px}
+ .scenePicker select{min-height:44px}
+ .quickBar input[type=range],#seek{height:28px;touch-action:pan-y}
+ summary{padding-block:11px}
+ .timelineClip{min-height:64px}
+}

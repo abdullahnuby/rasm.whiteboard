@@ -103,6 +103,7 @@
 <div class="panelhead">
 <h2>لوحة المعاينة</h2>
 <button id="editSceneMobile" class="mobileOnly">إعدادات المشهد</button>
+<div class="scenePicker"><button id="scenePrev" type="button" aria-label="المشهد السابق">›</button><select id="sceneSelect" aria-label="اختيار المشهد"></select><button id="sceneNext" type="button" aria-label="المشهد التالي">‹</button></div>
 <span id="meta">
 </span>
 </div>
@@ -115,6 +116,14 @@
 </div>
 <canvas id="board" width="960" height="540">
 </canvas>
+</div>
+<div class="quickBar" id="quickBar" aria-label="ضبط سريع للمشهد المحدد">
+<label>السرعة<select id="qSpeed"></select></label>
+<button id="qSpeedAll" type="button" title="تطبيق السرعة على كل المشاهد">للكل</button>
+<label>المدة (ث)<input id="qDuration" type="number" min="1" max="180" step=".1"></label>
+<label>حجم اليد<input id="qHandSize" type="range" min="55" max="160"></label>
+<label>اليد<select id="qSide"></select></label>
+<label>الثبات<input id="qHold" type="range" min="0" max="70"></label>
 </div>
 <div class="transport">
 <button id="play" aria-label="تشغيل أو إيقاف">▶︎</button>
@@ -178,7 +187,7 @@
 </span>
 <button id="fitAudio" hidden>مطابقة الفيديو مع مدة التسجيل</button>
 </div>
-<input type="file" accept=".mp3,.m4a,.aac,.wav,.ogg,.flac,.opus,.weba,audio/*" id="soundFile" hidden>
+<input type="file" multiple accept=".mp3,.m4a,.aac,.wav,.ogg,.flac,.opus,.weba,audio/*" id="soundFile" hidden>
 </section>
 <div class="edit">
 <button id="earlier">تقديم المشهد</button>

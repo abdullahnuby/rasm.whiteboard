@@ -63,9 +63,41 @@ async function importMedia(items){
  const audio=items.filter(isAudioFile),images=items.filter(f=>!isAudioFile(f));
  if(images.length)await importFiles(images);
  if(audio.length===1)await attachRecording(audio[0]);
- if(audio.length>1)el('msg').textContent='اختر ملفًا صوتيًا واحدًا لمسار التعليق.';
+ if(audio.length>1)await attachSceneVoiceovers(audio);
 }
-el('soundFile').onchange=async e=>{const file=e.target.files[0];e.target.value='';await attachRecording(file)};
+function encodeWav(buffer){
+ const ch=buffer.numberOfChannels,len=buffer.length,rate=buffer.sampleRate,out=new DataView(new ArrayBuffer(44+len*ch*2));
+ const str=(o,s)=>{for(let i=0;i<s.length;i++)out.setUint8(o+i,s.charCodeAt(i))};
+ str(0,'RIFF');out.setUint32(4,36+len*ch*2,true);str(8,'WAVEfmt ');out.setUint32(16,16,true);out.setUint16(20,1,true);out.setUint16(22,ch,true);
+ out.setUint32(24,rate,true);out.setUint32(28,rate*ch*2,true);out.setUint16(32,ch*2,true);out.setUint16(34,16,true);str(36,'data');out.setUint32(40,len*ch*2,true);
+ const data=[];for(let c=0;c<ch;c++)data.push(buffer.getChannelData(c));
+ let o=44;for(let i=0;i<len;i++)for(let c=0;c<ch;c++){const v=Math.max(-1,Math.min(1,data[c][i]));out.setInt16(o,v<0?v*32768:v*32767,true);o+=2}
+ return new Blob([out],{type:'audio/wav'});
+}
+// عدة ملفات صوت (ملف لكل مشهد): تُرتب بأرقام الأسماء وتُدمج في مسار واحد، وتُضبط مدة كل مشهد على مدة مقطعه.
+async function attachSceneVoiceovers(files){
+ if(recording||loading)return;
+ const sorted=[...files].sort((a,b)=>cmp.compare(digits(a.name),digits(b.name)));
+ if(sorted.some(f=>f.size>MAX_AUDIO_BYTES)){el('msg').textContent='أحد ملفات الصوت أكبر من 80 ميجابايت.';return}
+ const GAP=.4;stop();busy(true,'importing');setOperationStatus('جارٍ دمج ملفات الصوت',0,sorted.length);
+ try{
+  const ctx=audioEngine(),clips=[];
+  for(const f of sorted){clips.push(await ctx.decodeAudioData(await f.arrayBuffer()));setOperationStatus('جارٍ دمج ملفات الصوت',clips.length,sorted.length)}
+  const rate=clips[0].sampleRate,ch=Math.max(...clips.map(c=>c.numberOfChannels)),gapSamples=Math.round(GAP*rate);
+  const length=clips.reduce((n,c)=>n+c.length+gapSamples,0),merged=ctx.createBuffer(ch,length,rate);
+  let offset=0;for(const c of clips){for(let k=0;k<ch;k++)merged.getChannelData(k).set(c.getChannelData(Math.min(k,c.numberOfChannels-1)),offset);offset+=c.length+gapSamples}
+  const wav=new File([encodeWav(merged)],'voiceover-merged.wav',{type:'audio/wav'});
+  busy(false);clearOperationStatus();await attachRecording(wav);
+  if(scenes.length===clips.length&&!demo){
+   const durations=clips.map(c=>c.duration+GAP);
+   if(durations.some(d=>d<1||d>180)){el('msg').textContent='تم دمج '+clips.length+' ملف صوت، لكن مدة أحد المقاطع خارج 1 إلى 180 ثانية، فلم تُضبط مدد المشاهد.';return}
+   scenes.forEach((s,i)=>s.duration=durations[i]*(s.speed||1));time=0;refresh();queueSave();
+   el('msg').textContent='تم دمج '+clips.length+' ملف صوت وضبط مدة كل مشهد على مقطعه · '+merged.duration.toFixed(1)+' ثانية';
+  }else el('msg').textContent='تم دمج '+clips.length+' ملف صوت بالترتيب، لكن عدد المشاهد ('+scenes.length+') يختلف عن عدد المقاطع، فلم تُضبط مدد المشاهد. استخدم «مطابقة الفيديو مع مدة التسجيل» أو أضف/احذف مشاهد.';
+ }catch{el('msg').textContent='تعذّر دمج ملفات الصوت. جرّب WAV أو MP3.'}
+ finally{busy(false);clearOperationStatus()}
+}
+el('soundFile').onchange=async e=>{const list=[...e.target.files];e.target.value='';if(list.length>1)await attachSceneVoiceovers(list);else await attachRecording(list[0])};
 el('audioClear').onclick=()=>{stop();soundAsset=soundBuffer=null;showAudio();queueSave()};
 el('play').onclick=()=>{if(running)return stop();return playPreview()};
 el('copy').onclick=()=>{if(!scenes.length)return;let clone={...scenes[selected],name:scenes[selected].name+' (نسخة)'};scenes.splice(selected+1,0,clone);pick(selected+1);queueSave()};

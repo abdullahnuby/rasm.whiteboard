@@ -309,6 +309,12 @@ el('batchCancel').onclick=()=>{
  el('batchCancel').disabled=true;
  el('batchLabel').textContent='جارٍ إنهاء الصورة الحالية…';
 };
+function autoPickRatio(scene){
+ const w=scene?.src?.width,h=scene?.src?.height;if(!w||!h)return;
+ const r=w/h,opts=[...el('ratio').options];
+ const best=opts.reduce((m,o)=>Math.abs(Math.log(+o.value/r))<Math.abs(Math.log(+m.value/r))?o:m);
+ if(el('ratio').value!==best.value){el('ratio').value=best.value;size()}
+}
 async function importFiles(items){
  if(recording||loading||activeImport)return;
  const all=[...items],imageItems=all.filter(isImageFile);
@@ -347,7 +353,7 @@ async function importFiles(items){
    finally{URL.revokeObjectURL(url)}
   }
   if(added.length){
-   if(demo){scenes=[];clearRemoved()}
+   if(demo){scenes=[];clearRemoved();autoPickRatio(added[0])}
    demo=false;
    const first=scenes.length;scenes.push(...added);prewarmColorSchedules(added);pick(first);queueSave();
   }

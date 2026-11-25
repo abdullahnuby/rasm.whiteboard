@@ -123,3 +123,34 @@ el('drawerAudio').onclick=()=>{closeDrawer();el('soundFile').click()};
 el('drawerExportOptions').onclick=()=>choosePanel('video');
 el('drawerExport').onclick=()=>{closeDrawer();el('export').click()};
 moveInspector();
+
+// ضبط سريع من فوق المشهد نفسه: يعكس عناصر لوحة الخصائص ويرسل نفس أحداثها.
+(()=>{
+ const pairs=[['qSpeed','speed'],['qDuration','duration'],['qHandSize','handSize'],['qSide','side'],['qHold','hold']];
+ el('qSpeed').innerHTML=el('speed').innerHTML;el('qSide').innerHTML=el('side').innerHTML;
+ const sync=()=>{for(const [q,s] of pairs){const a=el(q),b=el(s);if(document.activeElement!==a)a.value=b.value;a.disabled=b.disabled}};
+ for(const [q,s] of pairs){
+  const fire=type=>{const b=el(s);b.value=el(q).value;b.dispatchEvent(new Event(type,{bubbles:true}))};
+  el(q).addEventListener('input',()=>fire('input'));
+  el(q).addEventListener('change',()=>fire('change'));
+ }
+ el('qSpeedAll').onclick=()=>el('allSpeed').click();
+ const base=refresh;refresh=function(){const r=base.apply(this,arguments);sync();return r};
+ sync();
+})();
+
+// اختيار المشهد من قائمة منسدلة بجوار المعاينة، مع السابق والتالي.
+(()=>{
+ const sel=el('sceneSelect'),prev=el('scenePrev'),next=el('sceneNext');
+ let signature='';
+ const sync=()=>{
+  const sig=scenes.map(s=>s.name).join('\u0001');
+  if(sig!==signature){signature=sig;sel.replaceChildren(...scenes.map((s,i)=>{const o=document.createElement('option');o.value=i;o.textContent=(i+1)+'. '+(s.name||'مشهد '+(i+1));return o}))}
+  sel.value=String(selected);sel.disabled=!scenes.length;prev.disabled=selected<=0;next.disabled=selected>=scenes.length-1;
+ };
+ sel.onchange=()=>pick(+sel.value);
+ prev.onclick=()=>{if(selected>0)pick(selected-1)};
+ next.onclick=()=>{if(selected<scenes.length-1)pick(selected+1)};
+ const base=refresh;refresh=function(){const r=base.apply(this,arguments);sync();return r};
+ sync();
+})();
