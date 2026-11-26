@@ -5,9 +5,9 @@ export type Point = readonly [number, number];
 export interface Rect { x: number; y: number; width: number; height: number; cx: number; cy: number; }
 export interface RasterFrame { width: number; height: number; pixels: Uint8ClampedArray; }
 export interface ComponentRecord { id: number; area: number; bounds: Rect; }
-export interface RasterElement { id: number; componentIds: number[]; area: number; bounds: Rect; orderIndex: number; manualZone?: number; durationWeight?: number; }
+export interface RasterElement { id: number; componentIds: number[]; area: number; bounds: Rect; orderIndex: number; manualZone?: number; durationWeight?: number; appear?: boolean; }
 export interface ElementRecord {
-  id: number; componentIds: number[]; area: number; bounds: Rect; orderIndex: number; manualZone?: number; durationWeight?: number;
+  id: number; componentIds: number[]; area: number; bounds: Rect; orderIndex: number; manualZone?: number; durationWeight?: number; appear?: boolean;
   strokes: StrokePath[];
   diagnostics: { source: "segmented" | "orphan-path"; tracedComponentIds: number[]; warnings: string[] };
 }
@@ -26,11 +26,11 @@ export interface RasterAnalysis {
 }
 export interface SceneOptions {
   direction?: Direction; motionStyle?: "smart" | "contour" | "centerline";
-  zones?: Array<{ x: number; y: number; w: number; h: number }>;
+  zones?: Array<{ x: number; y: number; w: number; h: number; appear?: boolean }>;
   simplifyTolerance?: number;
 }
 export interface ElementPlan {
-  id: number; componentIds: number[]; bounds: Rect; area: number; orderIndex: number; manualZone?: number; durationWeight?: number;
+  id: number; componentIds: number[]; bounds: Rect; area: number; orderIndex: number; manualZone?: number; durationWeight?: number; appear?: boolean;
   strokes: StrokePath[]; diagnostics: ElementRecord["diagnostics"];
   startDistance: number; endDistance: number;
 }
@@ -65,7 +65,7 @@ export interface EngineDiagnostics {
 }
 export interface LegacyScene {
   src: HTMLCanvasElement; baseLines: StrokePath[]; centerBaseLines?: StrokePath[];
-  zones?: Array<{ x: number; y: number; w: number; h: number }>;
+  zones?: Array<{ x: number; y: number; w: number; h: number; appear?: boolean }>;
   motionStyle?: "smart" | "contour" | "centerline"; elementDirection?: Direction;
   shapeSequence?: "smart" | "strokes"; engineAnalysisV2?: RasterAnalysis; enginePlanV2?: DrawingPlan;
   engineDiagnostics?: EngineDiagnostics; rasterLabels?: Uint32Array;

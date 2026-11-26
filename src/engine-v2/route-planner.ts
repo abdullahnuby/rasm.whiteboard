@@ -238,10 +238,16 @@ export function finalizeElements(
     }
     plans.push({
       id: element.id, componentIds: element.componentIds.slice(), bounds: { ...element.bounds },
-      area: element.area, orderIndex, manualZone: element.manualZone, durationWeight:element.durationWeight, strokes, diagnostics: element.diagnostics,
+      area: element.area, orderIndex, manualZone: element.manualZone, durationWeight:element.durationWeight, appear: element.appear, strokes, diagnostics: element.diagnostics,
       startDistance, endDistance: travelled
     });
   });
+  // Regions marked "appear" render fully in an instant instead of being hand-drawn:
+  // they get a near-zero share of the scene time while drawn regions keep their
+  // distance-proportional pacing.
+  if (plans.some(plan => plan.appear)) {
+    for (const plan of plans) plan.durationWeight = plan.appear ? 0.0001 : Math.max(plan.endDistance - plan.startDistance, 0.0001);
+  }
   return { elements: plans, lines, length: pointOffset, totalDistance: travelled };
 }
 

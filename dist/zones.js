@@ -5,7 +5,11 @@ function paintZones(extra){
  zoneContext.drawImage(zoneScene.src,0,0,zoneBoard.width,zoneBoard.height);
  [...draft,...(extra?[extra]:[])].forEach((r,i)=>{
   const x=r.x*zoneBoard.width,y=r.y*zoneBoard.height,w=r.w*zoneBoard.width,h=r.h*zoneBoard.height;
-  zoneContext.fillStyle='#549a582b';zoneContext.fillRect(x,y,w,h);zoneContext.strokeStyle='#275738';zoneContext.lineWidth=2;zoneContext.strokeRect(x,y,w,h);zoneContext.fillStyle='#275738';zoneContext.fillRect(x,y,23,22);zoneContext.fillStyle='white';zoneContext.font='bold 15px sans-serif';zoneContext.textAlign='center';zoneContext.fillText(String(i+1),x+11,y+16)
+  const appear=r.appear===true,tint=appear?'#8a6d2f33':'#549a582b',edge=appear?'#6b5316':'#275738';
+  zoneContext.fillStyle=tint;zoneContext.fillRect(x,y,w,h);zoneContext.strokeStyle=edge;zoneContext.lineWidth=2;
+  if(appear)zoneContext.setLineDash([7,5]);zoneContext.strokeRect(x,y,w,h);zoneContext.setLineDash([]);
+  zoneContext.fillStyle=edge;zoneContext.fillRect(x,y,23,22);zoneContext.fillStyle='white';zoneContext.font='bold 15px sans-serif';zoneContext.textAlign='center';zoneContext.fillText(String(i+1),x+11,y+16);
+  if(appear){const label='ظهور كامل';zoneContext.font='bold 13px sans-serif';const tw=zoneContext.measureText(label).width+12;zoneContext.fillStyle='#6b5316';zoneContext.fillRect(x+27,y,tw,22);zoneContext.fillStyle='white';zoneContext.textAlign='right';zoneContext.fillText(label,x+27+tw-6,y+16);zoneContext.textAlign='center'}
  });el('zoneUndo').disabled=!draft.length
 }
 function atPointer(e){const box=zoneBoard.getBoundingClientRect();return {x:within((e.clientX-box.left)/box.width,0,1,0),y:within((e.clientY-box.top)/box.height,0,1,0)}}
@@ -13,7 +17,10 @@ function rectangle(p){return {x:Math.min(origin.x,p.x),y:Math.min(origin.y,p.y),
 el('zoneEdit').onclick=()=>{if(!scenes[selected])return;stop();zoneScene=scenes[selected];draft=zoneScene.zones.slice();origin=null;zoneBoard.width=zoneScene.src.width;zoneBoard.height=zoneScene.src.height;el('zoneDialog').showModal();paintZones()};
 zoneBoard.onpointerdown=e=>{if(!e.isPrimary||draft.length>=80)return;origin=atPointer(e);zoneBoard.setPointerCapture(e.pointerId)};
 zoneBoard.onpointermove=e=>{if(origin&&e.isPrimary)paintZones(rectangle(atPointer(e)))};
-zoneBoard.onpointerup=e=>{if(!origin||!e.isPrimary)return;const r=rectangle(atPointer(e));if(r.w>.008&&r.h>.008)draft.push(r);origin=null;paintZones()};
+zoneBoard.onpointerup=e=>{if(!origin||!e.isPrimary)return;const r=rectangle(atPointer(e));
+ if(r.w>.008&&r.h>.008)draft.push(r);
+ else{const p=atPointer(e);for(let i=draft.length-1;i>=0;i--){const zone=draft[i];if(p.x>=zone.x&&p.x<=zone.x+zone.w&&p.y>=zone.y&&p.y<=zone.y+zone.h){zone.appear=!zone.appear;break}}}
+ origin=null;paintZones()};
 zoneBoard.onpointercancel=()=>{origin=null;paintZones()};
 el('zoneUndo').onclick=()=>{draft.pop();paintZones()};
 el('zoneClear').onclick=()=>{draft=[];paintZones()};

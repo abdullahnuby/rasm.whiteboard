@@ -22,6 +22,7 @@
 </span>
 <span>استوديو الوايت بورد</span>
 <button id="projectMenu" aria-haspopup="dialog">إدارة المشروع</button>
+<button id="sceneAddImages" type="button" class="addImagesBtn">＋ إضافة صور</button>
 <button id="export" class="primary">تصدير الفيديو</button>
 </header>
 <div class="appUpdateBar"><button id="appUpdate" type="button">التحقق من تحديث التطبيق</button><span id="appUpdateStatus" role="status"></span></div>
@@ -228,7 +229,7 @@
 </select>
 </label>
 <button id="elementEdit">مراجعة عناصر الصورة</button>
-<button id="zoneEdit">ترتيب مناطق الرسم</button>
+<button id="zoneEdit">تحديد مناطق الرسم بنفسي</button>
 <details>
 <summary>خيارات المظهر</summary>
 <label>سُمك الخط<select id="weight">
@@ -352,7 +353,7 @@
 </dialog>
 <dialog id="zoneDialog">
 <h2>ترتيب مناطق الرسم</h2>
-<p>حدّد مناطق المشهد بالترتيب الذي تريد رسمها به. يمكن فصل أجزاء من نفس الرسم. عند تداخل المناطق، تكون الأولوية للمنطقة الأولى، وتُرسم التفاصيل خارجها في النهاية.</p>
+<p>حدّد مناطق المشهد بالترتيب الذي تريد رسمها به. يمكن فصل أجزاء من نفس الرسم. عند تداخل المناطق، تكون الأولوية للمنطقة الأولى، وتُرسم التفاصيل خارجها في النهاية. اضغط على منطقة مرسومة لتحويلها بين «رسم باليد» و«ظهور كامل» بدون رسم (إطار متقطع ذهبي).</p>
 <canvas id="zoneBoard" aria-label="تحديد مناطق الرسم">
 </canvas>
 <div class="actions">

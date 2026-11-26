@@ -1,6 +1,6 @@
 import { unionBounds } from './geometry.js';
 import type { ComponentRecord, RasterAnalysis, RasterElement } from './types.js';
-type Zone={readonly x:number;readonly y:number;readonly w:number;readonly h:number};
+type Zone={readonly x:number;readonly y:number;readonly w:number;readonly h:number;readonly appear?:boolean};
 /** Split raster ownership at author-drawn region boundaries, even through one connected illustration.
  * Earlier regions win overlaps. Pixels outside regions keep their original automatic group.
  * Original analysis stays untouched, so clearing regions restores the original plan exactly.
@@ -36,7 +36,7 @@ export function partitionDrawingRegions(analysis:RasterAnalysis,zones:readonly Z
     const component={id,area:tail,bounds};components.push(component);
     const key=zone>=0?'region:'+zone:'automatic:'+(oldOwner.get(oldId)??oldId),group=groups.get(key);
     if(group){group.componentIds.push(id);group.area+=tail;group.bounds=unionBounds(group.bounds,bounds)}
-    else groups.set(key,{id:0,componentIds:[id],area:tail,bounds,orderIndex:0,manualZone:zone});
+    else groups.set(key,{id:0,componentIds:[id],area:tail,bounds,orderIndex:0,manualZone:zone,appear:zone>=0&&zones[zone].appear===true});
   }
   const elements=[...groups.values()].map((group,index)=>({...group,id:index+1,orderIndex:index}));
   return {...analysis,rasterLabels:labels,components,elements,diagnostics:{...analysis.diagnostics,componentCount:components.length,elementCount:elements.length,warnings:[...analysis.diagnostics.warnings,'Author regions split raster ownership; earlier regions take precedence in overlaps.']}};
