@@ -4,7 +4,40 @@
  const iosHelp=document.getElementById('iosInstallHelp'),storageButton=document.getElementById('protectStorage'),storageState=document.getElementById('storageState');
  const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent||'')||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
  const standalone=()=>navigator.standalone===true||window.matchMedia?.('(display-mode: standalone)').matches===true;
- let installPrompt=null,registration=null,lastStatusCheck=0,applyingUpdate=false;
+ let installPrompt=null,registration=null,lastStatusCheck=0,applyingUpdate=false,autoUpdateArmed=false,interacted=false;
+ window.addEventListener('pointerdown',()=>{interacted=true},{capture:true,passive:true});
+ window.addEventListener('keydown',()=>{interacted=true},{capture:true});
+ async function applyWaitingUpdate(){
+  const ready=await navigator.serviceWorker.getRegistration();
+  if(!ready?.waiting||applyingUpdate)return false;
+  if(!window.RasmPrepareUpdate)return false;
+  try{
+   const msg=document.getElementById('msg');if(msg)msg.textContent='جارٍ حفظ المشروع وتطبيق التحديث…';
+   await window.RasmPrepareUpdate();
+   applyingUpdate=true;ready.waiting.postMessage({type:'APPLY_SAVED_UPDATE'});
+   return true;
+  }catch{return false}
+ }
+ // Auto-apply a downloaded update without manual steps: right away on a fresh, untouched
+ // page or while the app is in the background; otherwise as soon as the app goes to background.
+ // The project is always saved first, and a failed save leaves the old version running.
+ function maybeAutoApply(){
+  if(applyingUpdate||autoUpdateArmed)return;
+  autoUpdateArmed=true;
+  (async()=>{
+   for(let i=0;i<40&&!window.RasmPrepareUpdate;i++)await new Promise(r=>setTimeout(r,500));
+   if(applyingUpdate||!window.RasmPrepareUpdate){autoUpdateArmed=false;return}
+   const ready=await navigator.serviceWorker.getRegistration();
+   if(!ready?.waiting){autoUpdateArmed=false;return}
+   if(document.visibilityState==='hidden'||(!interacted&&performance.now()<30000)){autoUpdateArmed=false;await applyWaitingUpdate();return}
+   const onHide=async()=>{
+    if(document.visibilityState!=='hidden')return;
+    document.removeEventListener('visibilitychange',onHide);autoUpdateArmed=false;
+    await applyWaitingUpdate();
+   };
+   document.addEventListener('visibilitychange',onHide);
+  })();
+ }
  const updateButton=document.getElementById('appUpdate'),updateStatus=document.getElementById('appUpdateStatus');
  const updateSay=text=>{if(updateStatus)updateStatus.textContent=text};
  const say=text=>{if(status)status.textContent=text};
@@ -32,7 +65,9 @@
  }
  function waitingUpdate(){
   if(!registration?.waiting)return false;
-  say('تحديث جاهز. اضغط تطبيق التحديث لحفظ مشروعك وتشغيل النسخة الجديدة. لن نعيد التحميل تلقائيًا أثناء عملك.');if(updateButton)updateButton.textContent='حفظ المشروع وتطبيق التحديث';return true;
+  say('تحديث جاهز. سيُحفظ مشروعك ويُطبق تلقائيًا عند الخروج من التطبيق، أو اضغط تطبيق التحديث الآن.');if(updateButton)updateButton.textContent='حفظ المشروع وتطبيق التحديث';
+  maybeAutoApply();
+  return true;
  }
  async function refreshOfflineState(){
   if(!registration?.active||waitingUpdate())return;
