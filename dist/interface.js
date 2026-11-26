@@ -157,9 +157,12 @@ moveInspector();
 // ===== Simple main screen: a short bottom bar, each button opens one small sheet =====
 (function(){
  const defs=[['speed','⚡','السرعة'],['hand','✋','اليد'],['elements','▦','العناصر'],['scenes','🎞','المشاهد'],['more','⚙','المزيد']];
- const ICONS={"speed": "<svg viewBox=\"0 0 24 24\"><path d=\"M13 2 4 14h7l-1 8 9-12h-7z\"/></svg>", "hand": "<svg viewBox=\"0 0 24 24\"><path d=\"M8 13V5.5a1.5 1.5 0 0 1 3 0V11m0-1V4a1.5 1.5 0 0 1 3 0v6m0-4a1.5 1.5 0 0 1 3 0v6m0-2a1.5 1.5 0 0 1 3 0v4a8 8 0 0 1-8 8h-1a7 7 0 0 1-6-3.5L3 14a1.6 1.6 0 0 1 2.6-1.8L8 15\"/></svg>", "elements": "<svg viewBox=\"0 0 24 24\"><rect x=\"3\" y=\"3\" width=\"8\" height=\"8\" rx=\"2\"/><rect x=\"13\" y=\"3\" width=\"8\" height=\"8\" rx=\"2\"/><rect x=\"3\" y=\"13\" width=\"8\" height=\"8\" rx=\"2\"/><path d=\"M17 14v6m-3-3h6\"/></svg>", "scenes": "<svg viewBox=\"0 0 24 24\"><rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"3\"/><path d=\"M8 5v14M16 5v14M3 10h5M3 14h5M16 10h5M16 14h5\"/></svg>", "more": "<svg viewBox=\"0 0 24 24\"><path d=\"M4 7h10m4 0h2M4 17h2m4 0h10\"/><circle cx=\"16\" cy=\"7\" r=\"2\"/><circle cx=\"8\" cy=\"17\" r=\"2\"/></svg>"};
+ const ICONS={"speed": "<svg viewBox=\"0 0 24 24\"><path d=\"M13 2 4 14h7l-1 8 9-12h-7z\"/></svg>", "hand": "<svg viewBox=\"0 0 24 24\"><path d=\"M8 13V5.5a1.5 1.5 0 0 1 3 0V11m0-1V4a1.5 1.5 0 0 1 3 0v6m0-4a1.5 1.5 0 0 1 3 0v6m0-2a1.5 1.5 0 0 1 3 0v4a8 8 0 0 1-8 8h-1a7 7 0 0 1-6-3.5L3 14a1.6 1.6 0 0 1 2.6-1.8L8 15\"/></svg>", "elements": "<svg viewBox=\"0 0 24 24\"><rect x=\"3\" y=\"3\" width=\"8\" height=\"8\" rx=\"2\"/><rect x=\"13\" y=\"3\" width=\"8\" height=\"8\" rx=\"2\"/><rect x=\"3\" y=\"13\" width=\"8\" height=\"8\" rx=\"2\"/><path d=\"M17 14v6m-3-3h6\"/></svg>", "scenes": "<svg viewBox=\"0 0 24 24\"><rect x=\"3\" y=\"5\" width=\"18\" height=\"14\" rx=\"3\"/><path d=\"M8 5v14M16 5v14M3 10h5M3 14h5M16 10h5M16 14h5\"/></svg>", "more": "<svg viewBox=\"0 0 24 24\"><path d=\"M4 7h10m4 0h2M4 17h2m4 0h10\"/><circle cx=\"16\" cy=\"7\" r=\"2\"/><circle cx=\"8\" cy=\"17\" r=\"2\"/></svg>","add": "<svg viewBox=\"0 0 24 24\"><circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M12 8v8M8 12h8\"/></svg>"};
  const titles={speed:'السرعة والمدة',hand:'اليد',elements:'عناصر الصورة وترتيب الرسم',audio:'التعليق الصوتي',scenes:'المشاهد',more:'المزيد'};
  const bar=document.createElement('nav');bar.id='simpleBar';bar.setAttribute('aria-label','إعدادات سريعة');
+ const addBar=document.createElement('button');addBar.type='button';addBar.id='barAdd';addBar.title='إضافة صور كمشاهد جديدة';
+ addBar.innerHTML='<span aria-hidden="true">'+ICONS.add+'</span><b>إضافة</b>';
+ addBar.onclick=()=>{close();el('files').click()};bar.append(addBar);
  const pop=document.createElement('section');pop.id='simplePop';pop.hidden=true;pop.setAttribute('role','dialog');pop.setAttribute('aria-labelledby','popTitle');
  pop.innerHTML='<div class="popHead"><strong id="popTitle"></strong><button type="button" id="popClose" aria-label="إغلاق">إغلاق ✕</button></div><div class="popBody"></div>';
  const body=pop.querySelector('.popBody'),secs={};
@@ -177,7 +180,9 @@ moveInspector();
  const hint=document.createElement('small');hint.textContent='داخل مراجعة العناصر: «ترتيب سريع» يقسّم الصورة ويرتّبها تلقائيًا.';secs.elements.append(hint);
   const edit=document.querySelector('.edit'),list=[...document.querySelectorAll('details.sceneList')].find(d=>d.id!=='engineDiagnosticsPanel');
  list.open=true;
- secs.scenes.append(edit,list);
+ const addInList=document.createElement('button');addInList.type='button';addInList.className='primary';addInList.textContent='＋ إضافة مشهد جديد';
+ addInList.onclick=()=>{close();el('files').click()};
+ secs.scenes.append(row(addInList),edit,list);
  secs.more.append(row(el('projectMenu'),el('storyOpen'),el('addFiles'),el('sampleProject')),row(el('appUpdate'),el('appUpdateStatus')),el('engineDiagnosticsPanel'),el('inspector'));
  el('seek').closest('.transport').after(bar);document.body.append(pop);
  function close(){pop.hidden=true;pop.dataset.open='';for(const b of bar.children)b.setAttribute('aria-pressed','false');document.documentElement.classList.remove('popOpen')}

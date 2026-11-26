@@ -135,7 +135,7 @@ a.downloadButton{display:inline-flex;align-items:center;justify-content:center;t
 .workflow,.quickBar,.appUpdateBar,#editSceneMobile,#storyOpenPlaceholder{display:none!important}
 .grid{grid-template-columns:1fr!important;max-width:900px;margin-inline:auto}
 main{padding-bottom:96px}
-#simpleBar{position:fixed;inset-inline:0;bottom:0;z-index:30;display:grid;grid-template-columns:repeat(5,1fr);gap:2px;background:#fff;border-top:1px solid #ded7e9;padding:6px max(6px,env(safe-area-inset-left)) max(6px,env(safe-area-inset-bottom));box-shadow:0 -4px 16px #2a1f5a1a}
+#simpleBar{position:fixed;inset-inline:0;bottom:0;z-index:30;display:grid;grid-template-columns:repeat(6,1fr);gap:2px;background:#fff;border-top:1px solid #ded7e9;padding:6px max(6px,env(safe-area-inset-left)) max(6px,env(safe-area-inset-bottom));box-shadow:0 -4px 16px #2a1f5a1a}
 #simpleBar button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:52px;padding:4px 2px;border:0;border-radius:12px;background:transparent;color:#3a3150;font-size:12px}
 #simpleBar button span{font-size:20px;line-height:1}
 #simpleBar button b{font-weight:600}
@@ -244,3 +244,7 @@ main{padding-top:12px}
 .timelinePlayhead:before{top:12px!important}
 .timelineScroll{padding-bottom:2px!important}
 .timelineClipCopy strong,.timelineClipCopy small{font-size:11px!important;line-height:1.25}
+
+/* v11: always-visible add-scene button in the bottom bar */
+#barAdd{color:#3c276f;font-weight:700}
+#barAdd span svg circle{fill:#ece6fb}
