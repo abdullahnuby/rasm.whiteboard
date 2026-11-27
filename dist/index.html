@@ -186,7 +186,7 @@
 <div class="audioAdvice">
 <span id="audioMatch">
 </span>
-<button id="syncAudio" hidden>ضبط المشاهد على التسجيل بالنقر</button>
+<button id="syncAudio" hidden>ضبط ثواني المشاهد على التسجيل</button>
 <button id="fitAudio" hidden>مطابقة الفيديو مع مدة التسجيل</button>
 </div>
 <input type="file" multiple accept=".mp3,.m4a,.aac,.wav,.ogg,.flac,.opus,.weba,audio/*" id="soundFile" hidden>
@@ -365,18 +365,17 @@
 </div>
 </dialog>
 <dialog id="syncDialog">
-<h2>ضبط المشاهد على التسجيل</h2>
-<p>استمع للتسجيل، واضغط «التالي» أول ما يبدأ الكلام عن اللوحة اللي بعدها. مدة كل مشهد تتحسب من ضغطاتك، وتتزاح تلقائيًا لأقرب وقفة في الصوت.</p>
-<div class="syncStage">
-<img id="syncThumb" alt="اللوحة الحالية">
-<div id="syncCounter"></div>
+<h2>ضبط ثواني المشاهد على التسجيل</h2>
+<p>شغّل التسجيل وحدد لكل مشهد ثانية البداية والنهاية. زر 📍 يأخذ الوقت الحالي من المشغل. بداية كل مشهد مربوطة بنهاية اللي قبله، والمدة = النهاية − البداية.</p>
+<div class="syncPlayer">
+<button id="syncPlay" aria-label="تشغيل أو إيقاف التسجيل">▶︎</button>
+<input id="syncSeek" type="range" min="0" max="1000" value="0" aria-label="التنقل في التسجيل">
+<output id="syncTime">0.0 / 0.0</output>
 </div>
-<div class="syncTrack"><div id="syncBar"></div></div>
+<div id="syncRows"></div>
 <p id="syncState" role="status"></p>
 <div class="actions">
-<button id="syncNext" class="syncNext">⏭ التالي</button>
-<button id="syncUndo">تراجع عن ضغطة</button>
-<button id="syncFinish">تطبيق الآن</button>
+<button id="syncApply" class="syncNext">تطبيق المدد</button>
 <button id="syncCancel">إلغاء</button>
 </div>
 </dialog>

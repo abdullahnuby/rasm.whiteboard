@@ -251,12 +251,19 @@ main{padding-top:12px}
 
 .addImagesBtn{flex:0 0 auto;min-height:44px;padding:7px 12px;border:0;border-radius:10px;background:#fff;color:#342553;font:inherit;font-weight:700;white-space:nowrap}@media(max-width:560px){.addImagesBtn{padding:7px 9px;font-size:13px}}
 .addImagesBtn:active{transform:scale(.96)}
-
-/* ضبط المشاهد على التسجيل بالنقر */
-.syncStage{position:relative;text-align:center;margin:10px 0}
-.syncStage img{max-width:100%;max-height:32vh;border-radius:12px;border:1px solid var(--line);background:#fff}
-#syncCounter{margin-top:8px;font-weight:700}
-.syncTrack{height:8px;background:#efedf5;border-radius:99px;overflow:hidden;margin:10px 0}
-#syncBar{height:100%;width:0;background:#5b3ea8;border-radius:99px;transition:width .2s linear}
-#syncState{font-size:13px;color:var(--dim);min-height:18px}
-.syncNext{flex:2;font-size:18px;font-weight:700;padding:14px 10px;background:#5b3ea8;color:#fff;border:0}
+/* ضبط ثواني المشاهد على التسجيل */
+#syncDialog{width:min(560px,96vw)}
+.syncPlayer{display:flex;align-items:center;gap:10px;margin:8px 0 12px}
+#syncPlay{min-width:48px;min-height:48px;font-size:20px}
+#syncSeek{flex:1}
+#syncTime{font:13px monospace;color:var(--dim);white-space:nowrap}
+.syncRow{display:flex;gap:10px;border:1px solid var(--line);border-radius:12px;padding:8px;margin-bottom:8px;background:#fcfcfe}
+.syncRow>img{width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--line);background:#fff;flex:none}
+.syncRowBody{flex:1;min-width:0}
+.syncRowTitle{font-weight:700;font-size:14px;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.syncRowTimes{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.syncRowTimes label{display:flex;align-items:center;gap:4px;font-size:13px;margin:0}
+#syncDialog .syncRowTimes input[type=number]{display:inline-block;width:64px;min-height:34px;margin:0;font-size:14px}
+.syncRowTimes output{font-size:13px;color:var(--dim)}
+.syncRowBtns{display:flex;gap:6px;margin-top:6px}
+.syncRowBtns button{font-size:12px;padding:5px 8px;min-height:34px}

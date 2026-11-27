@@ -1,104 +1,146 @@
 'use strict';
-// ضبط المشاهد على التسجيل بالنقر: يستمع المستخدم للتعليق الصوتي ويضغط «التالي»
-// كلما بدأ الكلام عن اللوحة التالية، فتُحسب مدة كل مشهد من الضغطات بدل سحب
-// حواف المشاهد على الخط الزمني. تُزاح الضغطات تلقائيًا لأقرب فاصل صامت.
+// ضبط ثواني المشاهد على التسجيل: مشغل صوت ومعاه قائمة المشاهد، لكل مشهد
+// ثانية بداية ونهاية يكتبها المستخدم أو يلتقطها من موضع المشغل بزر 📍.
+// البداية مربوطة بنهاية المشهد السابق حتى يبقى الفيديو متصلًا بلا فجوات،
+// وعند التطبيق تتحول (النهاية − البداية) إلى مدة كل مشهد.
 (function(){
  const dialog=el('syncDialog'),opener=el('syncAudio');
  if(!dialog||!opener)return;
- let player=null,playerUrl=null,taps=[],raf=0;
+ let player=null,playerUrl=null,raf=0,rows=[],segStop=-1;
 
- function silenceCenters(){
-  if(!soundBuffer)return[];
-  const data=soundBuffer.getChannelData(0),rate=soundBuffer.sampleRate,span=Math.max(1,Math.floor(rate*0.05));
-  const envelope=[];
-  for(let start=0;start+span<=data.length;start+=span){
-   let sum=0,count=0;
-   for(let i=start;i<start+span;i+=4){sum+=data[i]*data[i];count++}
-   envelope.push(Math.sqrt(sum/Math.max(1,count)));
-  }
-  if(!envelope.length)return[];
-  const sorted=[...envelope].sort((a,b)=>a-b);
-  const floor=sorted[Math.floor(sorted.length*0.3)]||0;
-  const speech=sorted[Math.floor(sorted.length*0.95)]||1;
-  const cut=Math.max(floor*2,speech*0.05);
-  const centers=[];let begin=-1;
-  const close=end=>{if(begin>=0&&(end-begin)*0.05>=0.3)centers.push((begin+end)/2*0.05);begin=-1};
-  envelope.forEach((value,index)=>{const quiet=value<cut;if(quiet&&begin<0)begin=index;if(!quiet)close(index)});
-  close(envelope.length);
-  return centers;
- }
-
- function nearest(value,marks){
-  let best=value,gap=Infinity;
-  for(const mark of marks){const d=Math.abs(mark-value);if(d<gap){gap=d;best=mark}}
-  return gap<=1?best:value;
- }
-
- function updateStage(){
-  const index=Math.min(taps.length,scenes.length-1),scene=scenes[index];
-  el('syncThumb').src=scene?.thumb||'';
-  el('syncCounter').textContent='المشهد '+(index+1)+' من '+scenes.length+(taps.length?' · ضغطات: '+taps.length:'');
- }
-
- function tick(){
-  if(!player)return;
-  const total=soundBuffer?soundBuffer.duration:0;
-  if(total)el('syncBar').style.width=Math.min(100,player.currentTime/total*100)+'%';
-  raf=requestAnimationFrame(tick);
- }
+ const fmt=v=>(Math.round(v*10)/10).toFixed(1);
 
  function stopPlayer(){
   cancelAnimationFrame(raf);
   if(player){player.pause();player.onended=null;player.src='';player=null}
   if(playerUrl){URL.revokeObjectURL(playerUrl);playerUrl=null}
+  el('syncPlay').textContent='▶︎';
  }
-
  function close(){stopPlayer();if(dialog.open)dialog.close()}
 
- function apply(){
-  if(!soundBuffer||!taps.length)return;
-  const marks=silenceCenters();
-  const snapped=taps.map(t=>nearest(t,marks));
-  for(let i=1;i<snapped.length;i++)snapped[i]=Math.max(snapped[i],snapped[i-1]+0.4);
-  const bounds=[0,...snapped,soundBuffer.duration];
-  const moved=snapped.some((v,i)=>Math.abs(v-taps[i])>0.05);
-  stop();
-  for(let i=0;i<=snapped.length&&i<scenes.length;i++){
-   const seconds=Math.max(0.5,bounds[i+1]-bounds[i]);
-   scenes[i].duration=seconds*(scenes[i].speed||1);
-  }
-  time=0;refresh();queueSave();
-  el('msg').textContent='ضُبطت مدد '+(snapped.length+1)+' مشاهد على التسجيل'+(moved?' مع التقاط فواصل الصمت.':'.');
+ function tick(){
+  if(!player)return;
+  const total=soundBuffer?soundBuffer.duration:0;
+  el('syncTime').textContent=fmt(player.currentTime)+' / '+fmt(total);
+  if(total)el('syncSeek').value=Math.round(player.currentTime/total*1000);
+  if(segStop>=0&&player.currentTime>=segStop){segStop=-1;player.pause();el('syncPlay').textContent='▶︎'}
+  raf=requestAnimationFrame(tick);
  }
+
+ function renderRows(){
+  const host=el('syncRows');
+  host.replaceChildren();
+  rows.forEach((row,i)=>{
+   const scene=scenes[i],item=document.createElement('div');
+   item.className='syncRow';
+   const img=document.createElement('img');img.src=scene.thumb||'';img.alt='';
+   const body=document.createElement('div');body.className='syncRowBody';
+   const title=document.createElement('div');title.className='syncRowTitle';
+   title.textContent=(i+1)+' · '+(scene.name||'مشهد');
+   const times=document.createElement('div');times.className='syncRowTimes';
+   const fromLabel=document.createElement('label');fromLabel.textContent='من ';
+   const from=document.createElement('input');from.type='number';from.min='0';from.step='0.1';from.inputMode='decimal';from.value=fmt(row.start);from.dataset.i=i;from.dataset.k='start';
+   fromLabel.append(from,' ث');
+   const toLabel=document.createElement('label');toLabel.textContent='إلى ';
+   const to=document.createElement('input');to.type='number';to.min='0';to.step='0.1';to.inputMode='decimal';to.value=fmt(row.end);to.dataset.i=i;to.dataset.k='end';
+   toLabel.append(to,' ث');
+   const dur=document.createElement('output');dur.id='syncDur'+i;dur.textContent=fmt(row.end-row.start)+' ث';
+   times.append(fromLabel,toLabel,dur);
+   const btns=document.createElement('div');btns.className='syncRowBtns';
+   const hear=document.createElement('button');hear.type='button';hear.textContent='⏵ اسمع';hear.dataset.act='seg';hear.dataset.i=i;
+   const pinStart=document.createElement('button');pinStart.type='button';pinStart.textContent='📍 بداية';pinStart.dataset.act='start';pinStart.dataset.i=i;
+   const pinEnd=document.createElement('button');pinEnd.type='button';pinEnd.textContent='📍 نهاية';pinEnd.dataset.act='end';pinEnd.dataset.i=i;
+   btns.append(hear,pinStart,pinEnd);
+   body.append(title,times,btns);item.append(img,body);host.append(item);
+  });
+ }
+
+ function refreshDurations(){
+  rows.forEach((row,i)=>{const out=el('syncDur'+i);if(out)out.textContent=fmt(Math.max(0,row.end-row.start))+' ث'});
+ }
+
+ function setBoundary(i,value){
+  const total=soundBuffer?soundBuffer.duration:Infinity;
+  value=Math.min(Math.max(0,value),total);
+  if(i>0)value=Math.max(value,rows[i-1].end+0.3);
+  if(i<rows.length-1)value=Math.min(value,rows[i+1].start-0.3);
+  rows[i].start=value;rows[i-1]&&(rows[i-1].end=value);
+  return value;
+ }
+ function setEnd(i,value){
+  const total=soundBuffer?soundBuffer.duration:Infinity;
+  value=Math.min(Math.max(0,value),total);
+  value=Math.max(value,rows[i].start+0.3);
+  rows[i].end=value;rows[i+1]&&(rows[i+1].start=value);
+  return value;
+ }
+
+ function syncInputs(){
+  el('syncRows').querySelectorAll('input[type=number]').forEach(input=>{
+   const i=+input.dataset.i;
+   input.value=fmt(input.dataset.k==='start'?rows[i].start:rows[i].end);
+  });
+  refreshDurations();
+ }
+
+ el('syncRows').addEventListener('change',event=>{
+  const input=event.target.closest('input[type=number]');
+  if(!input)return;
+  const i=+input.dataset.i,value=parseFloat(input.value);
+  if(!Number.isFinite(value)){syncInputs();return}
+  if(input.dataset.k==='start')setBoundary(i,value);else setEnd(i,value);
+  syncInputs();
+ });
+ el('syncRows').addEventListener('click',event=>{
+  const button=event.target.closest('button[data-act]');
+  if(!button||!player)return;
+  const i=+button.dataset.i,act=button.dataset.act;
+  if(act==='seg'){
+   player.currentTime=rows[i].start;segStop=rows[i].end;
+   player.play().then(()=>{el('syncPlay').textContent='⏸'}).catch(()=>{});
+  }else if(act==='start'){setBoundary(i,player.currentTime);syncInputs()}
+  else{setEnd(i,player.currentTime);syncInputs()}
+ });
+
+ el('syncPlay').onclick=()=>{
+  if(!player)return;
+  if(player.paused)player.play().then(()=>{el('syncPlay').textContent='⏸'}).catch(()=>{el('syncState').textContent='الصوت لم يبدأ. اضغط مرة أخرى.'});
+  else{player.pause();el('syncPlay').textContent='▶︎'}
+ };
+ el('syncSeek').addEventListener('input',()=>{
+  if(!player||!soundBuffer)return;
+  player.currentTime=el('syncSeek').value/1000*soundBuffer.duration;
+ });
+ el('syncApply').onclick=()=>{
+  if(!rows.length)return;
+  for(const row of rows)if(row.end-row.start<0.3){el('syncState').textContent='كل مشهد يحتاج 0.3 ثانية على الأقل بين البداية والنهاية.';return}
+  stop();
+  rows.forEach((row,i)=>{scenes[i].duration=(row.end-row.start)*(scenes[i].speed||1)});
+  time=0;refresh();queueSave();
+  el('msg').textContent='ضُبطت مدد '+rows.length+' مشاهد على التسجيل.';
+  close();
+ };
+ el('syncCancel').onclick=close;
+ dialog.addEventListener('cancel',stopPlayer);
+ dialog.addEventListener('close',stopPlayer);
 
  opener.onclick=()=>{
   if(!soundBuffer||scenes.length<2||loading||recording)return;
-  stop();taps=[];updateStage();
-  el('syncBar').style.width='0';
-  el('syncState').textContent='التسجيل يعمل الآن. اضغط «التالي» عند بدء الكلام عن اللوحة التالية.';
+  stop();
+  // الحدود الابتدائية توزع مدد المشاهد الحالية على زمن التسجيل نفسه،
+  // فيقرأ المستخدم ثواني حقيقية على التسجيل حتى لو كان الفيديو أطول أو أقصر.
+  const scale=soundBuffer.duration/Math.max(0.1,total());
+  let at=0;
+  rows=scenes.map(scene=>{const span=sceneSeconds(scene)*scale,row={start:at,end:at+span};at+=span;return row});
+  renderRows();refreshDurations();
+  el('syncState').textContent='';
   dialog.showModal();
   stopPlayer();
   if(soundAsset?.blob){
    playerUrl=URL.createObjectURL(soundAsset.blob);
    player=new Audio(playerUrl);
-   player.onended=()=>{if(taps.length){apply()}close()};
-   player.play().catch(()=>{el('syncState').textContent='الصوت لم يبدأ. اضغط «التالي» لنبدأ من جديد أو أغلق وحاول مرة أخرى.'});
+   player.addEventListener('ended',()=>{el('syncPlay').textContent='▶︎'});
    tick();
   }else el('syncState').textContent='التسجيل غير جاهز للتشغيل.';
  };
-
- el('syncNext').onclick=()=>{
-  if(!player||!soundBuffer)return;
-  const t=player.currentTime;
-  if(t<0.2||t>=soundBuffer.duration-0.2)return;
-  if(taps.length&&t-taps[taps.length-1]<0.3)return;
-  taps.push(t);
-  if(taps.length>=scenes.length-1){apply();close();return}
-  updateStage();
- };
- el('syncUndo').onclick=()=>{taps.pop();updateStage()};
- el('syncFinish').onclick=()=>{if(taps.length)apply();close()};
- el('syncCancel').onclick=close;
- dialog.addEventListener('cancel',()=>{stopPlayer()});
- dialog.addEventListener('close',()=>{stopPlayer()});
 })();
