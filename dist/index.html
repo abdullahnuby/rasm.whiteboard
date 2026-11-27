@@ -186,6 +186,7 @@
 <div class="audioAdvice">
 <span id="audioMatch">
 </span>
+<button id="syncAudio" hidden>ضبط المشاهد على التسجيل بالنقر</button>
 <button id="fitAudio" hidden>مطابقة الفيديو مع مدة التسجيل</button>
 </div>
 <input type="file" multiple accept=".mp3,.m4a,.aac,.wav,.ogg,.flac,.opus,.weba,audio/*" id="soundFile" hidden>
@@ -363,6 +364,22 @@
 <button id="zoneClose">إلغاء</button>
 </div>
 </dialog>
+<dialog id="syncDialog">
+<h2>ضبط المشاهد على التسجيل</h2>
+<p>استمع للتسجيل، واضغط «التالي» أول ما يبدأ الكلام عن اللوحة اللي بعدها. مدة كل مشهد تتحسب من ضغطاتك، وتتزاح تلقائيًا لأقرب وقفة في الصوت.</p>
+<div class="syncStage">
+<img id="syncThumb" alt="اللوحة الحالية">
+<div id="syncCounter"></div>
+</div>
+<div class="syncTrack"><div id="syncBar"></div></div>
+<p id="syncState" role="status"></p>
+<div class="actions">
+<button id="syncNext" class="syncNext">⏭ التالي</button>
+<button id="syncUndo">تراجع عن ضغطة</button>
+<button id="syncFinish">تطبيق الآن</button>
+<button id="syncCancel">إلغاء</button>
+</div>
+</dialog>
 <dialog id="projectDialog">
 <form method="dialog">
 <button class="close">إغلاق</button>
@@ -429,6 +446,8 @@
 </script>
 <script src="preview-audio.js"></script>
 <script src="project.js">
+</script>
+<script src="sync-audio.js">
 </script>
 <script src="zones.js">
 </script>

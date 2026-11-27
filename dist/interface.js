@@ -17,6 +17,7 @@ function refreshGuide(){
  el('stepPreview').textContent=hasScenes?total().toFixed(1)+' ثانية':'أضف صورك أولًا';
  el('flowPreview').disabled=!hasScenes;
  el('fitAudio').hidden=!audio||!hasScenes;
+ el('syncAudio').hidden=!audio||!hasScenes||scenes.length<2;
  el('audioMatch').textContent=audio&&hasScenes?(
  Math.abs(audio.duration-total())>.3?'التسجيل '+audio.duration.toFixed(1)+' ث · الفيديو '+total().toFixed(1)+' ث':'مدة الفيديو مطابقة للتسجيل'):'';
  for(const id of ['copy','zoneEdit','allSpeed','allOriginal','allOutline'])el(id).disabled=!hasScenes;
