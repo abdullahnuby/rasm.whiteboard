@@ -121,7 +121,7 @@ function encloses(outer: Rect, inner: Rect): boolean {
 }
 
 function attachSmallMark(small: ComponentRecord, large: ComponentRecord): boolean {
-  if (small.area > large.area * 0.22) return false;
+  if (small.area > large.area * 0.22 || isStrokeLike(large.bounds)) return false;
   const a = small.bounds, b = large.bounds;
   const gapX = Math.max(0, Math.max(a.x, b.x) - Math.min(a.x + a.width, b.x + b.width));
   const gapY = Math.max(0, Math.max(a.y, b.y) - Math.min(a.y + a.height, b.y + b.height));
@@ -130,7 +130,44 @@ function attachSmallMark(small: ComponentRecord, large: ComponentRecord): boolea
     aligned && gapY <= Math.max(7, b.height * 0.55) && gapX <= Math.max(4, b.width * 0.35);
 }
 
-export function groupComponents(components: ComponentRecord[]): Array<{ id: number; componentIds: number[]; area: number; bounds: Rect }> {
+// A component many times longer than it is thick is a line, wire, arrow or
+// underline, not a letter: marks must not attach to it. Otherwise a touching
+// diacritic pulls the whole stroke into its word's element (and transitively
+// every other word the stroke touches), scrambling the reading order again.
+function isStrokeLike(bounds: Rect): boolean {
+  return bounds.width >= bounds.height * 6 || bounds.height >= bounds.width * 6;
+}
+
+// Arabic diacritics (dots above ب ت ث ن ي, the three dots of ش) can be wider
+// than attachSmallMark allows: a two/three-dot mark is often nearly as wide as
+// its letter and heavier than 22% of its area. A diacritic still hugs its
+// letter: it sits directly on it (vertical gap close to zero) and mostly
+// inside the letter's horizontal span. That tight footprint is what separates
+// a real diacritic from an independent label, so the area and width limits
+// can be relaxed here.
+function attachDiacritic(small: ComponentRecord, large: ComponentRecord): boolean {
+  if (small.area > large.area * 0.8 || isStrokeLike(large.bounds)) return false;
+  const a = small.bounds, b = large.bounds;
+  const gapY = Math.max(0, Math.max(a.y, b.y) - Math.min(a.y + a.height, b.y + b.height));
+  const overlapX = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+  return a.width <= Math.max(6, b.width * 1.15) && a.height <= Math.max(6, b.height * 0.9) &&
+    gapY <= Math.max(4, a.height * 0.6) && overlapX >= a.width * 0.6;
+}
+
+// Marks attach to letters and small shapes, never to a canvas-dominating
+// drawing: a large border, wire frame or diagram that spans much of the image
+// would otherwise adopt every nearby word (its size-based allowances scale
+// with its own size), merging whole text lines into the drawing and scrambling
+// their reading order. Content next to a big drawing is drawn as its own
+// element in normal reading order instead.
+function isCanvasDominating(bounds: Rect, image?: { width: number; height: number }): boolean {
+  if (!image) return false;
+  const area = image.width * image.height;
+  return bounds.width >= image.width * 0.25 && bounds.height >= image.height * 0.12 &&
+    bounds.width * bounds.height >= area * 0.05;
+}
+
+export function groupComponents(components: ComponentRecord[], image?: { width: number; height: number }): Array<{ id: number; componentIds: number[]; area: number; bounds: Rect }> {
   if (!components.length) return [];
   const parents = components.map((_, index) => index);
   const find = (value: number): number => {
@@ -191,13 +228,18 @@ export function groupComponents(components: ComponentRecord[]): Array<{ id: numb
     });
 
     // Detached marks are indexed by area first, then checked with the exact
-    // original alignment and gap rules.
-    const attachAreaLimit = parent.area * 0.22;
-    const rangeX = Math.max(5, b.width * 0.45);
-    const rangeY = b.height * 0.5 + Math.max(2.5, b.height * 0.3) + Math.max(7, b.height * 0.55);
+    // original alignment and gap rules, plus the relaxed diacritic footprint.
+    // Canvas-dominating drawings adopt nothing: their scaled allowances would
+    // swallow independent nearby content (see isCanvasDominating).
+    const attachAreaLimit = parent.area * 0.8;
+    const rangeX = Math.max(6, b.width * 1.15);
+    const rangeY = b.height * 0.5 + Math.max(3, b.height * 0.45) + Math.max(7, b.height * 0.55);
+    const dominating = isCanvasDominating(b, image);
     visitCandidates(attachmentIndex, attachAreaLimit,
       b.cx - rangeX, b.cx + rangeX, b.cy - rangeY, b.cy + rangeY, j => {
-        if (i !== j && attachSmallMark(components[j], parent)) join(i, j);
+        if (i === j || dominating) return;
+        const candidate = components[j];
+        if (attachSmallMark(candidate, parent) || attachDiacritic(candidate, parent)) join(i, j);
       }
     );
   }
@@ -239,7 +281,7 @@ export function analyzeRaster(
     effectiveForeground = 1;
     warnings.push("No distinct foreground was detected; the full canvas is retained as one element for diagnostics.");
   }
-  let groups = groupComponents(components);
+  let groups = groupComponents(components, { width, height });
   groups.sort((a, b) => a.bounds.cy - b.bounds.cy || b.bounds.cx - a.bounds.cx);
   groups = groups.map((group, index) => ({ ...group, id: index + 1, orderIndex: index }));
   const componentToElement = new Map<number, number>();
